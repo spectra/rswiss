@@ -1,6 +1,6 @@
 require 'thread'
 class Player
-	attr_reader :matches, :score, :id, :opponents, :c_score
+	attr_reader :matches, :score, :id, :opponents, :c_score, :wins
 
 	# Initializes a new Player
 	#
@@ -13,11 +13,12 @@ class Player
 		@byed = false
 		@opponents = []
 		@c_score = 0
+		@wins = 0
 	end
 
 	# :nodoc:
 	def inspect
-		sprintf("#<%s:%#x @id=%d @score=%.1f @buchholz_score=%.1f @c_score=%.1f @opp_c_score=%.1f @matches=%d @byed=%s>", self.class.name, self.__id__, @id, @score, buchholz_score, @c_score, opp_c_score, @matches, @byed.inspect)
+		sprintf("#<%s:%#x @id=%d @matches=%d @byed=%s @score=%.1f @buchholz_score=%.1f @c_score=%.1f @opp_c_score=%.1f @wins=%d>", self.class.name, self.__id__, @id, @matches, @byed.inspect, @score, buchholz_score, @c_score, opp_c_score, @wins)
 	end
 
 	# Mark a lost game
@@ -31,6 +32,7 @@ class Player
 			@matches += 1
 			@score += 1.0
 			@c_score += @score
+			@wins += 1
 		}
 	end
 
@@ -53,7 +55,7 @@ class Player
 		}
 	end
 
-	# Add an opponent to the list of opponents (important to calculate the Buchholz score)
+	# Add an opponent to the list of opponents (important to calculate tie-breaking scores)
 	def add_opponent(opponent)
 		@opponents << opponent
 	end
@@ -251,7 +253,7 @@ class Tournament
 	# Who is the winner?
 	#
 	# The winner is decided using some tie-breaking criteria if needed:
-	# Direct Score > Median Buchholz Score > Cumulative Score > Opponent's Cumulative Score
+	# Direct Score > Median Buchholz Score > Cumulative Score > Opponent's Cumulative Score > Number of Wins
 	#
 	# An array is returned with the winner and the criteria used.
 	# An Exception is raised if the tie is too hard to break.
@@ -290,7 +292,16 @@ class Tournament
 		top_player3 = top_player2.reject { |player| player.opp_c_score < opp_c_scores.max }
 		if top_player3.length == 1
 			# Great! We have a winner!
-			return [ top_player2[0], "Opponent's Cumulative Score" ]
+			return [ top_player3[0], "Opponent's Cumulative Score" ]
+		end
+
+		# Fourth tie-breaking criteria: Number of Wins
+		wins = []
+		top_player3.each { |player| wins << player.wins }
+		top_player4 = top_player3.reject { |player| player.wins < wins.max }
+		if top_player4.length == 1
+			# Great! We have a winner!
+			return [ top_player4[0], "Number of Wins" ]
 		else
 			raise RuntimeError, "We have a difficult to break tie!"
 		end

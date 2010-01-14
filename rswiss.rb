@@ -1,7 +1,8 @@
 require 'thread'
 class Player
-	attr_reader :matches, :score, :id, :opponents
+	attr_reader :matches, :score, :id, :opponents, :c_score
 
+	# Initializes a new Player
 	def initialize(id)
 		@id = id
 		@score = 0
@@ -9,47 +10,65 @@ class Player
 		@mutex = Mutex.new
 		@byed = false
 		@opponents = []
+		@c_score = 0
 	end
 
 	def inspect
-		sprintf("#<%s:%#x @id=%d @score=%.1f @buchholz_score=%.1f @matches=%d @byed=%s>", self.class.name, self.__id__, @id, @score, buchholz_score, @matches, @byed.inspect)
+		sprintf("#<%s:%#x @id=%d @score=%.1f @buchholz_score=%.1f @c_score=%.1f @opp_c_score=%.1f @matches=%d @byed=%s>", self.class.name, self.__id__, @id, @score, buchholz_score, @c_score, opp_c_score, @matches, @byed.inspect)
 	end
 
+	# Mark a lost game
 	def lost
 		@matches += 1
 	end
 
+	# Mark a won game
 	def won
 		@mutex.synchronize {
 			@matches += 1
-			@score += 1
+			@score += 1.0
+			@c_score += @score
 		}
 	end
 
+	# Mark a draw
 	def draw
 		@mutex.synchronize {
 			@matches += 1
 			@score += 0.5
+			@c_score += @score
 		}
 	end
 
+	# Receive a bye (raises a RuntimeError if already received one)
 	def bye
 		raise RuntimeError, "Already received a bye!" if @byed
 		@mutex.synchronize {
 			@matches += 1
-			@score += 1
+			@score += 1.0
 			@byed = true
 		}
 	end
 
+	# Add an opponent to the list of opponents (important to calculate the Buchholz score)
 	def add_opponent(opponent)
 		@opponents << opponent
 	end
 	
+	# Calculate the Buchholz score
 	def buchholz_score
 		sum = 0
 		@opponents.each do |opponent|
 			sum += opponent.score
+		end
+		return sum
+	end
+
+	# Calculate the Opponent's Cumulative Score
+	def opp_c_score
+		sum = 0
+		@opponents.each do |opponent|
+			sum += opponent.c_score
 		end
 		return sum
 	end
@@ -186,25 +205,43 @@ class Tournament
 	end
 
 	def winner
-		raise RuntimeError, "We've got a tie!" if is_tied?
-		target = highest_score
-		top_players = @players.reject { |player| player.score < target }
-		top_players[0]
-	end
-
-	def tie_break
-		raise RuntimeError, "We have no tie!" unless is_tied?
+		# Decide the winner just by the score
 		target = highest_score
 		top_player0 = @players.reject { |player| player.score < target }
+		if top_player0.length == 1
+			# Great! We have a winner!
+			return [ top_player0[0], "Direct Score" ]
+		end
+
+		# First tie-break criteria: Buchholz score
 		scores = []
 		top_player0.each do |player|
 			scores << player.buchholz_score
 		end
 		top_player1 = top_player0.reject { |player| player.buchholz_score < scores.max }
 		if top_player1.length == 1
-			return top_player1[0]
+			# Great! We have a winner!
+			return [ top_player1[0], "Buchholz Score" ]
+		end
+
+		# Second tie-break criteria: Cumulative Score
+		c_scores = []
+		top_player1.each { |player| c_scores << player.c_score }
+		top_player2 = top_player1.reject { |player| player.c_score < c_scores.max }
+		if top_player2.length == 1
+			# Great! We have a winner!
+			return [ top_player2[0], "Cumulative Score" ]
+		end
+
+		# Third tie-break criteria: Opponent's Cumulative Score
+		opp_c_scores = []
+		top_player2.each { |player| opp_c_scores << player.opp_c_score }
+		top_player3 = top_player2.reject { |player| player.opp_c_score < opp_c_scores.max }
+		if top_player3.length == 1
+			# Great! We have a winner!
+			return [ top_player2[0], "Opponent's Cumulative Score" ]
 		else
-			raise RuntimeError, "We're still tied!"
+			raise RuntimeError, "We have a difficult to break tie!"
 		end
 	end
 
@@ -215,6 +252,8 @@ class Tournament
 		raise RuntimeError, "We reached the end of the tournament!" if end_reached?
 
 		@mutex.synchronize {
+			n_matches = (@players.length/2).floor
+			this_round = []
 			@bye_factor = 1
 			@round == 0 ? @players.shuffle! : rearrange!
 			if ! last.nil?
@@ -225,35 +264,53 @@ class Tournament
 					retry
 				end
 			end
-			gen_matches do |match|
-				@generated_matches << match
+			begin
+				gen_matches do |match|
+					this_round << match
+				end
+				raise StandardError if this_round.length != n_matches
+			rescue StandardError
+				rearrange!
+				this_round = []
+				retry
 			end
+			@generated_matches += this_round
 			@round += 1
 		}
 	end
 
 	def rearrange!
+		scores = []
+		@players.each { |player| scores << player.score unless scores.include?(player.score) }
+		scores.each do |score|
+			# Select those with same score
+			players_tmp = @players.select { |player| player.score == score }
+			next if players_tmp.length <= 1      # If not more than one, get next group
+			# Great... we have a group. Remove them from the main array
+			@players.delete_if { |player| player.score == score }
+			# Shuffle the temp array
+			players_tmp.shuffle!
+			# Give it back to the main array
+			@players += players_tmp
+		end
+		# Sort it again in the end
 		@players.sort! { |a, b| b.score <=> a.score }
 	end
 
 	def gen_matches(&block)
-		n_matches = (@players.length/2).floor
 		played_this_turn = []
-		count = 0
 		@players.each do |p1|
 			next if played_this_turn.include?(p1)
 			@players.each do |p2|
 				next if played_this_turn.include?(p2)
 				next if p1 == p2              # Player cannot play itself
 				next if has_match?(p1, p2)    # Cannot repeat matches
-				puts "#{p1.matches} / #{p2.matches} / #{@round}"
+				next if p1.matches != @round or p2.matches != @round
 				played_this_turn << p1
 				played_this_turn << p2
 				yield Match.new(p1, p2)
-				count += 1
 				break
 			end
-			break if count == n_matches     # Already generated enough matches
 		end
 	end
 
@@ -268,7 +325,6 @@ class Tournament
 	end
 
 	def last
-		puts ">>>Last: #{@players.last.id} / #{@players.last.score}"
 		@players.length.odd? ? @players.last : nil
 	end
 

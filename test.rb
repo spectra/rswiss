@@ -4,6 +4,7 @@ players = ARGV[0].to_i
 p = [];0.upto(players) { |n| p << Player.new(n) }
 t = Tournament.new; p.each { |pl| t.add_player(pl) }
 t.begin!
+puts "\nNew tournment:"
 while true
 	begin
 		m = t.get_next_match

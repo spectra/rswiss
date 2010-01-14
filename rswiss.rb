@@ -57,10 +57,20 @@ class Player
 	
 	# Calculate the Buchholz score
 	def buchholz_score
-		sum = 0
+		scores = []
 		@opponents.each do |opponent|
-			sum += opponent.score
+			scores << opponent.score
 		end
+		if scores.length > 9
+			# Discard first and last 2 (consider just the middle)
+			scores.sort!
+			scores = scores[2...-2]
+		elsif scores.length > 3
+			# Discard first and last
+			scores.sort!
+			scores = scores[1...-1]
+		end
+		sum = scores.inject(0) { |sum, value| sum + value }
 		return sum
 	end
 
@@ -122,6 +132,7 @@ class Tournament
 		@generated_matches = []
 		@pending_matches = []
 		@mutex = Mutex.new
+		@rearranges = 0
 	end
 
 	def begin!
@@ -255,7 +266,7 @@ class Tournament
 			n_matches = (@players.length/2).floor
 			this_round = []
 			@bye_factor = 1
-			@round == 0 ? @players.shuffle! : rearrange!
+			@round == 0 ? @players.shuffle! : soft_rearrange!
 			if ! last.nil?
 				begin
 					last.bye
@@ -268,9 +279,11 @@ class Tournament
 				gen_matches do |match|
 					this_round << match
 				end
-				raise StandardError if this_round.length != n_matches
-			rescue StandardError
-				rearrange!
+				raise RuntimeError if this_round.length != n_matches
+			rescue RuntimeError
+				@rearranges += 1
+				raise StandardError,"Maximum number of rearranges reached (#{max_rearranges})." if @rearranges >= max_rearranges
+				hard_rearrange!
 				this_round = []
 				retry
 			end
@@ -279,7 +292,11 @@ class Tournament
 		}
 	end
 
-	def rearrange!
+	def soft_rearrange!
+		@players.sort! { |a, b| b.score <=> a.score }
+	end
+
+	def hard_rearrange!
 		scores = []
 		@players.each { |player| scores << player.score unless scores.include?(player.score) }
 		scores.each do |score|
@@ -294,7 +311,11 @@ class Tournament
 			@players += players_tmp
 		end
 		# Sort it again in the end
-		@players.sort! { |a, b| b.score <=> a.score }
+		soft_rearrange!
+	end
+
+	def max_rearranges
+		@players.length
 	end
 
 	def gen_matches(&block)

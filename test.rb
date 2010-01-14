@@ -7,7 +7,7 @@ while true
 	p = [];0.upto(players) { |n| p << Player.new(n) }
 	t = Tournament.new; p.each { |pl| t.add_player(pl) }
 	t.begin!
-	puts "\nNew tournment: #{tournament}"
+	puts "\nNew tournment: #{tournament}. Now is #{Time.now}."
 	while true
 		not_ended = false
 		begin
@@ -43,7 +43,7 @@ while true
 	end
 	
 	if ! not_ended
-		pp t.final_chart
+		pp t.final_chart if players < 50
 		winner = t.winner
 		puts "The winner (by #{winner[1]}) is:"
 		pp winner[0]

@@ -44,9 +44,13 @@ while true
 	
 	if ! not_ended
 		pp t.final_chart if players < 50
-		winner = t.winner
-		puts "The winner (by #{winner[1]}) is:"
-		pp winner[0]
+		begin
+			winner = t.winner
+			puts "The winner (by #{winner[1]}) is:"
+			pp winner[0]
+		rescue RuntimeError
+			puts "This have to be decided by luck..."
+		end
 	else
 		puts "Something bad happened"
 		problems += 1

@@ -146,11 +146,31 @@ class Tournament
 		@pending_matches = []
 		@mutex = Mutex.new
 		@rearranges = 0
+
+		@can_repeat_matches = false
+		@repeated_matches = []
 	end
 
 	# Set the tournament to begin (prevent new players to enter)
 	def begin!
 		@begun = true
+	end
+
+	# Allow the repetition of matches (as last resort)
+	def allow_repeated_matches
+		raise RuntimeError, "Already begun!" if @begun
+		@can_repeat_matches = true
+	end
+
+	# Forbid the repetition of matches
+	def forbid_repeated_matches
+		raise RuntimeError, "Already begun!" if @begun
+		@can_repeat_matches = false
+	end
+
+	# Get the number of repeated matches
+	def repeated_matches
+		@repeated_matches.length / 2
 	end
 
 	# Add a new player (only before issuing a #begin!)
@@ -216,7 +236,7 @@ class Tournament
 	# match:: a Match
 	def put_match(match)
 		raise RuntimeError, "This match doesn't have a result yet!" if match.result.nil?
-		raise RuntimeError, "Already have that match!" if has_match?(match.p1, match.p2)
+		raise RuntimeError, "Already have that match!" if has_match?(match.p1, match.p2) and ! @can_repeat_matches
 		raise RuntimeError, "We reached the end of the tournament!" if end_reached?
 
 		@mutex.synchronize { 
@@ -342,13 +362,28 @@ class Tournament
 			rescue RuntimeError
 				# ... so we'll rearrange it the "hard" (and slow) way, trying to sort the problem out.
 				@rearranges += 1
-				if @rearranges >= max_rearranges
-					# But even this has limitations.
-					raise StandardError,"Maximum number of rearranges reached (#{max_rearranges})."
+				if @rearranges < max_rearranges
+					# Not done with you yet, lady...
+					hard_rearrange!
+					this_round = []
+					retry
+				else
+					# Well... hard rearrangements have limitations... Let's see if we're allowed to repeat matches.
+					puts ">>> Here be dragons <<<"
+					if ! @can_repeat_matches
+						# Humpf... Be more flexible!
+						raise StandardError,"Maximum number of rearranges reached (#{max_rearranges})."
+					else
+						# Yes... we'll allow the generation of an already played match. Let's find out with one.
+						find_matches_to_repeat(this_round) do |match|
+							this_round << match
+						end
+						if this_round.length != n_matches
+							# Well... we tried!
+							raise StandardError,"Seems it is not enough to allow repeated matches. How sad..."
+						end
+					end
 				end
-				hard_rearrange!
-				this_round = []
-				retry
 			end
 
 			# Great... we have generated enough matches for this round.
@@ -427,6 +462,33 @@ class Tournament
 	# Returns the last unpaired player (or nil if all can be paired).
 	def last
 		@players.length.odd? ? @players.last : nil
+	end
+
+	# Find a good match to repeat given an array of matches (this is auxiliary function to #gen_next_round)
+	#
+	# round:: matches already generated in this round
+	# block:: the receiver of the matches.
+	def find_matches_to_repeat(round, &block)
+		players = []
+		round.each do |match|
+			players << match.p1
+			players << match.p2
+		end
+
+		have_not_played_yet = @players - players
+		@matches.reverse.each do |match|
+			if have_not_played_yet.include?(match.p1) and \
+			   have_not_played_yet.include?(match.p2) and \
+				 ! @repeated_matches.include?([match.p1, match.p2]) and \
+				 ! @repeated_matches.include?([match.p2, match.p1])
+
+				have_not_played_yet.delete(match.p1)
+				have_not_played_yet.delete(match.p2)
+				@repeated_matches << [match.p1, match.p2]
+				@repeated_matches << [match.p2, match.p1]
+				yield Match.new(match.p1, match.p2)
+			end
+		end
 	end
 
 end

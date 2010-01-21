@@ -238,10 +238,13 @@ class Tournament
 		raise RuntimeError, "This match doesn't have a result yet!" if match.result.nil?
 		raise RuntimeError, "Already have that match!" if has_match?(match.p1, match.p2) and ! @can_repeat_matches
 		raise RuntimeError, "We reached the end of the tournament!" if end_reached?
+		unless @pending_matches.detect { |m| (m.p1.id == match.p1.id and m.p2.id == match.p2.id) or (m.p2.id == match.p1.id and m.p1.id == match.p2.id) }
+			raise RuntimeError, "Haven't given that match"
+		end
 
 		@mutex.synchronize { 
 			@matches << match
-			@pending_matches.delete(match)
+			@pending_matches.delete_if { |m| (m.p1.id == match.p1.id and m.p2.id == match.p2.id) or (m.p2.id == match.p1.id and m.p1.id == match.p2.id) }
 		}
 	end
 

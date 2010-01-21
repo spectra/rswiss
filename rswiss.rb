@@ -1,5 +1,7 @@
 require 'thread'
 class Player
+	class AlreadyByed < RuntimeError; def message; "Already received a bye!"; end; end
+
 	attr_reader :matches, :score, :id, :opponents, :c_score, :wins
 
 	# Initializes a new Player
@@ -47,7 +49,7 @@ class Player
 
 	# Receive a bye (raises a RuntimeError if already received one)
 	def bye
-		raise RuntimeError, "Already received a bye!" if @byed
+		raise AlreadyByed if @byed
 		@mutex.synchronize {
 			@matches += 1
 			@score += 1.0
@@ -91,6 +93,8 @@ class Player
 end
 
 class Match
+	class AlreadyDecided < RuntimeError; def message; "This match is already decided!"; end; end
+
 	attr_reader :p1, :p2, :result, :initial_score
 
 	# Initializes a new Match
@@ -108,7 +112,7 @@ class Match
 	#
 	# outcome:: 0 for draw, 1 for p1 wins, 2 for p2 wins
 	def decide(outcome)
-		raise RuntimeError, "Already decided!" unless @result.nil?
+		raise AlreadyDecided unless @result.nil?
 
 		# Decide the match
 		case outcome
@@ -122,7 +126,7 @@ class Match
 				@p1.draw
 				@p2.draw
 			else
-				raise RuntimeError, "A match can be decided by 0, 1 or 2"
+				raise ArgumentError, "A match can be decided by 0, 1 or 2."
 		end
 		@p1.add_opponent(@p2)
 		@p2.add_opponent(@p1)
@@ -131,6 +135,16 @@ class Match
 end
 
 class Tournament
+	class AlreadyBegun < RuntimeError; def message; "This tournament has already begun!"; end; end
+	class NotBegun < RuntimeError; def message; "This tournament has not begun yet!"; end; end
+	class PlayerExists < RuntimeError; def message; "This player already exist!"; end; end
+	class MatchExists < RuntimeError; def message; "This match already exist!"; end; end
+	class MatchNotCheckedOut < RuntimeError; def message; "This match has not been checked out!"; end; end
+	class EndOfTournament < RuntimeError; def message; "This tournament reached the end!"; end; end
+	class StillTied < RuntimeError; def message; "We have a difficult tie to break. Try flipping a coin."; end; end
+	class MaxRearranges < RuntimeError; def message; "Reached maximum number of rearrangements allowed (#{max_rearranges})."; end; end
+	class RepeatitionExhausted < RuntimeError; def message; "Allowing mqatch repetition as last resort was not enough."; end; end
+
 	attr_reader :round, :pending_matches
 
 	# Initializes a new tournament
@@ -158,13 +172,13 @@ class Tournament
 
 	# Allow the repetition of matches (as last resort)
 	def allow_repeated_matches
-		raise RuntimeError, "Already begun!" if @begun
+		raise AlreadyBegun if @begun
 		@can_repeat_matches = true
 	end
 
 	# Forbid the repetition of matches
 	def forbid_repeated_matches
-		raise RuntimeError, "Already begun!" if @begun
+		raise AlreadyBegun if @begun
 		@can_repeat_matches = false
 	end
 
@@ -177,8 +191,8 @@ class Tournament
 	#
 	# player:: Player to be added
 	def add_player(player)
-		raise RuntimeError, "Already begun!" if @begun
-		raise RuntimeError, "Player already there!" if has_player?(player.id)
+		raise AlreadyBegun if @begun
+		raise PlayerExists if has_player?(player.id)
 
 		@players << player
 	end
@@ -201,7 +215,7 @@ class Tournament
 
 	# Calculate the number of needed rounds (after #begin!)
 	def rounds
-		raise RuntimeError, "Not begun!" unless @begun
+		raise NotBegun unless @begun
 
 		if @rounds.nil?
 			@rounds = (Math.log(@players.length) / Math.log(2)).ceil
@@ -211,13 +225,13 @@ class Tournament
 
 	# Have we reached the end of the tournament?
 	def end_reached?
-		raise RuntimeError, "Not begun!" unless @begun
+		raise NotBegun unless @begun
 		@round >= rounds and @pending_matches.empty? and @generated_matches.empty?
 	end
 
 	# Checkout the next match of the tournament
 	def get_next_match
-		raise RuntimeError, "Not begun!" unless @begun
+		raise NotBegun unless @begun
 		if @generated_matches.empty?
 			gen_next_round
 			get_next_match
@@ -235,11 +249,11 @@ class Tournament
 	#
 	# match:: a Match
 	def put_match(match)
-		raise RuntimeError, "This match doesn't have a result yet!" if match.result.nil?
-		raise RuntimeError, "Already have that match!" if has_match?(match.p1, match.p2) and ! @can_repeat_matches
-		raise RuntimeError, "We reached the end of the tournament!" if end_reached?
+		raise ArgumentError, "This match doesn't have a result yet!" if match.result.nil?
+		raise MatchExists if has_match?(match.p1, match.p2) and ! @can_repeat_matches
+		raise EndOfTournament if end_reached?
 		unless @pending_matches.detect { |m| (m.p1.id == match.p1.id and m.p2.id == match.p2.id) or (m.p2.id == match.p1.id and m.p1.id == match.p2.id) }
-			raise RuntimeError, "Haven't given that match"
+			raise MatchNotCheckedOut
 		end
 
 		@mutex.synchronize { 
@@ -250,7 +264,6 @@ class Tournament
 
 	# Return an array of the players sorted by score
 	def final_chart
-		raise RuntimeError, "Tournament had not ended yet!" unless end_reached?
 		@players.sort { |a, b| b.score <=> a.score }
 	end
 
@@ -326,7 +339,7 @@ class Tournament
 			# Great! We have a winner!
 			return [ top_player4[0], "Number of Wins" ]
 		else
-			raise RuntimeError, "We have a difficult to break tie!"
+			raise StillTied
 		end
 	end
 
@@ -335,7 +348,7 @@ class Tournament
 	# Generate the next round of matches
 	def gen_next_round
 		raise RuntimeError, "Still #{@pending_matches.length} matches to be returned." unless @pending_matches.empty?
-		raise RuntimeError, "We reached the end of the tournament!" if end_reached?
+		raise EndOfTournament if end_reached?
 
 		@mutex.synchronize {
 			n_matches = (@players.length/2).floor
@@ -375,7 +388,7 @@ class Tournament
 					puts ">>> Here be dragons <<<"
 					if ! @can_repeat_matches
 						# Humpf... Be more flexible!
-						raise StandardError,"Maximum number of rearranges reached (#{max_rearranges})."
+						raise MaxRearranges
 					else
 						# Yes... we'll allow the generation of an already played match. Let's find out with one.
 						find_matches_to_repeat(this_round) do |match|
@@ -383,7 +396,7 @@ class Tournament
 						end
 						if this_round.length != n_matches
 							# Well... we tried!
-							raise StandardError,"Seems it is not enough to allow repeated matches. How sad..."
+							raise RepetitionExhausted
 						end
 					end
 				end

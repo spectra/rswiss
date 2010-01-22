@@ -15,14 +15,16 @@ class Player
 		@matches = 0
 		@mutex = Mutex.new
 		@byed = false
-		@opponents = []
+		@opps_lost = []
+		@opps_draw = []
+		@opps_won = []
 		@c_score = 0
 		@wins = 0
 	end
 
 	# :nodoc:
 	def inspect
-		sprintf("#<%s:%#x @id=%d @matches=%d @byed=%s @score=%.1f @buchholz_score=%.1f @c_score=%.1f @opp_c_score=%.1f @wins=%d>", self.class.name, self.__id__, @id, @matches, @byed.inspect, @score, buchholz_score, @c_score, opp_c_score, @wins)
+		sprintf("#<%s:%#x @id=%d @matches=%d @byed=%s @score=%.1f @buchholz_score=%.1f @c_score=%.1f @opp_c_score=%.1f @wins=%d, @neustadtl_score=%.2f>", self.class.name, self.__id__, @id, @matches, @byed.inspect, @score, buchholz_score, @c_score, opp_c_score, @wins, neustadtl_score)
 	end
 
 	# Mark a lost game
@@ -63,14 +65,29 @@ class Player
 	def already_byed?; @byed; end
 
 	# Add an opponent to the list of opponents (important to calculate tie-breaking scores)
-	def add_opponent(opponent)
-		@opponents << opponent
+	#
+	# outcome:: 0, 1 or 2 (see Match)
+	# opponent:: who I played against
+	def add_opponent(outcome, opponent)
+		case outcome
+			when 0 then
+				@opps_draw << opponent
+			when 1 then
+				@opps_won << opponent
+			when 2 then
+				@opps_lost << opponent
+		end
 	end
-	
+
+	# Array of opponents
+	def opponents
+		@opps_draw + @opps_won + @opps_lost
+	end
+
 	# Calculate the Buchholz score
 	def buchholz_score
 		scores = []
-		@opponents.each do |opponent|
+		opponents.each do |opponent|
 			scores << opponent.score
 		end
 		if scores.length > 9
@@ -89,10 +106,25 @@ class Player
 	# Calculate the Opponent's Cumulative Score
 	def opp_c_score
 		sum = 0
-		@opponents.each do |opponent|
+		opponents.each do |opponent|
 			sum += opponent.c_score
 		end
 		return sum
+	end
+
+	# Calculate the Neustadtl Score
+	def neustadtl_score
+		defeated_sum = 0
+		@opps_won.each do |opponent|
+			defeated_sum += opponent.score
+		end
+
+		draw_sum = 0
+		@opps_draw.each do |opponent|
+			draw_sum += opponent.score
+		end
+
+		return defeated_sum + (draw_sum / 2)
 	end
 end
 
@@ -124,17 +156,21 @@ class Match
 			when 1 then
 				@p1.won
 				@p2.lost
+				@p1.add_opponent(1, @p2)
+				@p2.add_opponent(2, @p1)
 			when 2 then
 				@p1.lost
 				@p2.won
+				@p1.add_opponent(2, @p2)
+				@p2.add_opponent(1, @p1)
 			when 0 then
 				@p1.draw
 				@p2.draw
+				@p1.add_opponent(0, @p2)
+				@p2.add_opponent(0, @p1)
 			else
 				raise ArgumentError, "A match can be decided by 0, 1 or 2."
 		end
-		@p1.add_opponent(@p2)
-		@p2.add_opponent(@p1)
 		@result = outcome
 	end
 end
@@ -259,7 +295,7 @@ class Tournament
 	# Who is the winner?
 	#
 	# The winner is decided using some tie-breaking criteria if needed:
-	# Direct Score > Median Buchholz Score > Cumulative Score > Opponent's Cumulative Score > Number of Wins
+	# Direct Score > Median Buchholz Score > Neustadtl Score > Cumulative Score > Opponent's Cumulative Score > Number of Wins
 	#
 	# An array is returned with the winner and the criteria used.
 	# An Exception is raised if the tie is too hard to break.
@@ -283,31 +319,40 @@ class Tournament
 			return [ top_player1[0], "Buchholz Score" ]
 		end
 
-		# Second tie-break criteria: Cumulative Score
-		c_scores = []
-		top_player1.each { |player| c_scores << player.c_score }
-		top_player2 = top_player1.reject { |player| player.c_score < c_scores.max }
+		# Second tie-break criteria: Neustadtl Score
+		n_scores = []
+		top_player1.each { |player| n_scores << player.neustadtl_score }
+		top_player2 = top_player1.reject { |player| player.neustadtl_score < n_scores.max }
 		if top_player2.length == 1
 			# Great! We have a winner!
-			return [ top_player2[0], "Cumulative Score" ]
+			return [ top_player2[0], "Neustadtl Score" ]
 		end
 
-		# Third tie-break criteria: Opponent's Cumulative Score
-		opp_c_scores = []
-		top_player2.each { |player| opp_c_scores << player.opp_c_score }
-		top_player3 = top_player2.reject { |player| player.opp_c_score < opp_c_scores.max }
+		# Third tie-break criteria: Cumulative Score
+		c_scores = []
+		top_player2.each { |player| c_scores << player.c_score }
+		top_player3 = top_player2.reject { |player| player.c_score < c_scores.max }
 		if top_player3.length == 1
 			# Great! We have a winner!
-			return [ top_player3[0], "Opponent's Cumulative Score" ]
+			return [ top_player3[0], "Cumulative Score" ]
 		end
 
-		# Fourth tie-breaking criteria: Number of Wins
-		wins = []
-		top_player3.each { |player| wins << player.wins }
-		top_player4 = top_player3.reject { |player| player.wins < wins.max }
+		# Fourth tie-break criteria: Opponent's Cumulative Score
+		opp_c_scores = []
+		top_player3.each { |player| opp_c_scores << player.opp_c_score }
+		top_player4 = top_player3.reject { |player| player.opp_c_score < opp_c_scores.max }
 		if top_player4.length == 1
 			# Great! We have a winner!
-			return [ top_player4[0], "Number of Wins" ]
+			return [ top_player4[0], "Opponent's Cumulative Score" ]
+		end
+
+		# Fifth tie-breaking criteria: Number of Wins
+		wins = []
+		top_player4.each { |player| wins << player.wins }
+		top_player5 = top_player4.reject { |player| player.wins < wins.max }
+		if top_player5.length == 1
+			# Great! We have a winner!
+			return [ top_player5[0], "Number of Wins" ]
 		else
 			raise StillTied
 		end

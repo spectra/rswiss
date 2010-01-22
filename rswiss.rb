@@ -57,6 +57,9 @@ class Player
 		}
 	end
 
+	# Have we received a bye?
+	def already_byed?; @byed; end
+
 	# Add an opponent to the list of opponents (important to calculate tie-breaking scores)
 	def add_opponent(opponent)
 		@opponents << opponent
@@ -320,15 +323,12 @@ class Tournament
 			@bye_factor = 1	                                  # Reset @bye_factor (just in case we need it)
 			@round == 0 ? @players.shuffle! : soft_rearrange! # round 0 is random
 
-			# Do we have a last unpaired player?
-			if ! last.nil?
-				begin
-					# Yes! Try to bye it.
-					last.bye
-				rescue RuntimeError
-					# Oops... Already have a bye. #bye_detected! will try to solve it using @bye_factor.
-					@round == 0 ? @players.shuffle! : bye_detected!
-					retry
+			# Will we have a last unpaired player?
+			if @players.length.odd?
+				# Yes :-) Let's find someone to bye!
+				@players.reverse.each do |player|
+					# Stop looking for if we found it.
+					(player.bye; break) unless player.already_byed?
 				end
 			end
 
@@ -416,32 +416,13 @@ class Tournament
 				next if p1 == p2                          # player cannot play against itself
 				next if has_match?(p1, p2)                # cannot repeat matches (this is a major source of problems
 				                                          # ... with few players - and the reason for hard_rearrange!)
-				next if p2.matches != @round              # exceeded number of matches in a round
+				next if p2.matches != @round              # exceeded number of matches in a round (e.g.: received a bye already)
 				played_this_turn << p1
 				played_this_turn << p2
 				yield Match.new(p1, p2)
 				break
 			end
 		end
-	end
-
-	# Applies some black magic to try to sort out the problem of last
-	# players that already received a bye.
-	#
-	# This use @bye_factor to traverse the @players array from bottom up.
-	def bye_detected!
-		tail = []
-		0.upto(@bye_factor) do
-			tail << @players.pop
-		end
-		@players.push tail.pop
-		@bye_factor += 1
-		@players += tail
-	end
-
-	# Returns the last unpaired player (or nil if all can be paired).
-	def last
-		@players.length.odd? ? @players.last : nil
 	end
 
 	# Find a good match to repeat given an array of matches (this is auxiliary function to #gen_next_round)

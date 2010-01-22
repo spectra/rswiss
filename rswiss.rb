@@ -135,8 +135,7 @@ class Match
 end
 
 class Tournament
-	class AlreadyBegun < RuntimeError; def message; "This tournament has already begun!"; end; end
-	class NotBegun < RuntimeError; def message; "This tournament has not begun yet!"; end; end
+	class RepeatedPlayersIds < RuntimeError; def message; "Repeated player ids detected!"; end; end
 	class PlayerExists < RuntimeError; def message; "This player already exist!"; end; end
 	class MatchExists < RuntimeError; def message; "This match already exist!"; end; end
 	class MatchNotCheckedOut < RuntimeError; def message; "This match has not been checked out!"; end; end
@@ -145,56 +144,40 @@ class Tournament
 	class MaxRearranges < RuntimeError; def message; "Reached maximum number of rearrangements allowed (#{max_rearranges})."; end; end
 	class RepeatitionExhausted < RuntimeError; def message; "Allowing mqatch repetition as last resort was not enough."; end; end
 
-	attr_reader :round, :pending_matches
+	attr_reader :round, :rounds, :checkedout_matches, :matches
 
 	# Initializes a new tournament
-	def initialize
-		@matches = []
+	#
+	# players_array:: array of player ids.
+	# allow_repeated_matches:: boolean defining if we allow repeating matches as last resort (default: false).
+	def initialize(players_array, allow_repeated_matches = false)
+		raise RepeatedPlayerIds if players_array != players_array.uniq
+
+		# Populate our array of players
 		@players = []
-		@begun = false
+		players_array.each do |player_id|
+			@players << Player.new(player_id)
+		end
+
+		# Internal state.
+		@rounds = (Math.log(@players.length) / Math.log(2)).ceil
+		@matches = (@players.length/2).floor
+		@rearranges = 0
 		@round = 0
 		@bye_factor = 0
-		@rounds = nil
+		@can_repeat_matches = [ true, false ].include?(allow_repeated_matches) ? allow_repeated_matches : false
 
-		@generated_matches = []
-		@pending_matches = []
+		# Match Maker
 		@mutex = Mutex.new
-		@rearranges = 0
-
-		@can_repeat_matches = false
+		@generated_matches = []
+		@checkedout_matches = []
+		@committed_matches = []
 		@repeated_matches = []
-	end
-
-	# Set the tournament to begin (prevent new players to enter)
-	def begin!
-		@begun = true
-	end
-
-	# Allow the repetition of matches (as last resort)
-	def allow_repeated_matches
-		raise AlreadyBegun if @begun
-		@can_repeat_matches = true
-	end
-
-	# Forbid the repetition of matches
-	def forbid_repeated_matches
-		raise AlreadyBegun if @begun
-		@can_repeat_matches = false
 	end
 
 	# Get the number of repeated matches
 	def repeated_matches
 		@repeated_matches.length / 2
-	end
-
-	# Add a new player (only before issuing a #begin!)
-	#
-	# player:: Player to be added
-	def add_player(player)
-		raise AlreadyBegun if @begun
-		raise PlayerExists if has_player?(player.id)
-
-		@players << player
 	end
 
 	# Test if a match have occurred in this tournament. The order doesn't matter
@@ -203,7 +186,7 @@ class Tournament
 	# p1:: Player 1
 	# p2:: Player 2
 	def has_match?(p1, p2)
-		! (@matches.detect { |match| ((match.p1.id == p1.id and match.p2.id == p2.id) or (match.p2.id == p1.id and match.p1.id == p2.id)) }).nil?
+		! (@committed_matches.detect { |match| ((match.p1.id == p1.id and match.p2.id == p2.id) or (match.p2.id == p1.id and match.p1.id == p2.id)) }).nil?
 	end
 
 	# Test if we already have this player.
@@ -213,25 +196,14 @@ class Tournament
 		! (@players.detect { |player| player.id == id }).nil?
 	end
 
-	# Calculate the number of needed rounds (after #begin!)
-	def rounds
-		raise NotBegun unless @begun
-
-		if @rounds.nil?
-			@rounds = (Math.log(@players.length) / Math.log(2)).ceil
-		end
-		@rounds
-	end
 
 	# Have we reached the end of the tournament?
-	def end_reached?
-		raise NotBegun unless @begun
-		@round >= rounds and @pending_matches.empty? and @generated_matches.empty?
+	def ended?
+		@round >= @rounds and @checkedout_matches.empty? and @generated_matches.empty?
 	end
 
 	# Checkout the next match of the tournament
 	def get_next_match
-		raise NotBegun unless @begun
 		if @generated_matches.empty?
 			gen_next_round
 			get_next_match
@@ -239,7 +211,7 @@ class Tournament
 			match = nil
 			@mutex.synchronize {
 				match = @generated_matches.pop
-				@pending_matches.push match
+				@checkedout_matches.push match
 			}
 			return match
 		end
@@ -251,14 +223,14 @@ class Tournament
 	def put_match(match)
 		raise ArgumentError, "This match doesn't have a result yet!" if match.result.nil?
 		raise MatchExists if has_match?(match.p1, match.p2) and ! @can_repeat_matches
-		raise EndOfTournament if end_reached?
-		unless @pending_matches.detect { |m| (m.p1.id == match.p1.id and m.p2.id == match.p2.id) or (m.p2.id == match.p1.id and m.p1.id == match.p2.id) }
+		raise EndOfTournament if ended?
+		unless @checkedout_matches.detect { |m| (m.p1.id == match.p1.id and m.p2.id == match.p2.id) or (m.p2.id == match.p1.id and m.p1.id == match.p2.id) }
 			raise MatchNotCheckedOut
 		end
 
 		@mutex.synchronize { 
-			@matches << match
-			@pending_matches.delete_if { |m| (m.p1.id == match.p1.id and m.p2.id == match.p2.id) or (m.p2.id == match.p1.id and m.p1.id == match.p2.id) }
+			@committed_matches << match
+			@checkedout_matches.delete_if { |m| (m.p1.id == match.p1.id and m.p2.id == match.p2.id) or (m.p2.id == match.p1.id and m.p1.id == match.p2.id) }
 		}
 	end
 
@@ -277,13 +249,6 @@ class Tournament
 	def lowest_score
 		chart = final_chart
 		chart[-1].score
-	end
-
-	# Do we have a tie?
-	def is_tied?
-		target = highest_score
-		top_players = @players.reject { |player| player.score < target }
-		top_players.length != 1
 	end
 
 	# Who is the winner?
@@ -347,11 +312,10 @@ class Tournament
 
 	# Generate the next round of matches
 	def gen_next_round
-		raise RuntimeError, "Still #{@pending_matches.length} matches to be returned." unless @pending_matches.empty?
-		raise EndOfTournament if end_reached?
+		raise RuntimeError, "Still #{@checkedout_matches.length} matches to be returned." unless @checkedout_matches.empty?
+		raise EndOfTournament if ended?
 
 		@mutex.synchronize {
-			n_matches = (@players.length/2).floor
 			this_round = []
 			@bye_factor = 1	                                  # Reset @bye_factor (just in case we need it)
 			@round == 0 ? @players.shuffle! : soft_rearrange! # round 0 is random
@@ -374,7 +338,7 @@ class Tournament
 				end
 
 				# If we haven't generated enough matches, there might be a problem with our "classification"...
-				raise RuntimeError if this_round.length != n_matches
+				raise RuntimeError if this_round.length != @matches
 			rescue RuntimeError
 				# ... so we'll rearrange it the "hard" (and slow) way, trying to sort the problem out.
 				@rearranges += 1
@@ -394,7 +358,7 @@ class Tournament
 						find_matches_to_repeat(this_round) do |match|
 							this_round << match
 						end
-						if this_round.length != n_matches
+						if this_round.length != @matches
 							# Well... we tried!
 							raise RepetitionExhausted
 						end
@@ -492,7 +456,7 @@ class Tournament
 		end
 
 		have_not_played_yet = @players - players
-		@matches.reverse.each do |match|
+		@committed_matches.reverse.each do |match|
 			if have_not_played_yet.include?(match.p1) and \
 			   have_not_played_yet.include?(match.p2) and \
 				 ! @repeated_matches.include?([match.p1, match.p2]) and \

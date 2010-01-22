@@ -6,10 +6,8 @@ tournament = 0
 problems = 0
 workarounds = 0
 while true
-	p = [];0.upto(players) { |n| p << Player.new(n) }
-	t = Tournament.new; p.each { |pl| t.add_player(pl) }
-	t.allow_repeated_matches
-	t.begin!
+	p = [];0.upto(players) { |n| p << n }
+	t = Tournament.new(p, repeat_on)
 	puts "\nNew tournment: #{tournament}. Repeating matches as last resort is <#{repeat_on ? "" : "not "}allowed>. Now is #{Time.now}."
 	while true
 		not_ended = false

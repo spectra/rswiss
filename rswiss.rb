@@ -1,4 +1,6 @@
 require 'thread'
+
+# Class to represent a Player (this is used internally by Tournament)
 class Player
 	class AlreadyByed < RuntimeError; def message; "Already received a bye!"; end; end
 
@@ -95,6 +97,7 @@ class Player
 
 end
 
+# Class to represent a Match (this is used internally by Tournament)
 class Match
 	class AlreadyDecided < RuntimeError; def message; "This match is already decided!"; end; end
 
@@ -206,10 +209,10 @@ class Tournament
 	end
 
 	# Checkout the next match of the tournament
-	def get_next_match
+	def checkout_match
 		if @generated_matches.empty?
 			gen_next_round
-			get_next_match
+			checkout_match
 		else
 			match = nil
 			@mutex.synchronize {
@@ -223,7 +226,7 @@ class Tournament
 	# Commit a checked-out match back in
 	#
 	# match:: a Match
-	def put_match(match)
+	def commit_match(match)
 		raise ArgumentError, "This match doesn't have a result yet!" if match.result.nil?
 		raise MatchExists if has_match?(match.p1, match.p2) and ! @can_repeat_matches
 		raise EndOfTournament if ended?

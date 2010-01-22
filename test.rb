@@ -12,7 +12,7 @@ while true
 	while true
 		not_ended = false
 		begin
-			m = t.get_next_match
+			m = t.checkout_match
 		rescue RuntimeError
 			# Some error like end of tournament
 			break
@@ -40,7 +40,7 @@ while true
 				m.decide(1)
 			end
 		end
-		t.put_match(m)
+		t.commit_match(m)
 	end
 	
 	if ! not_ended

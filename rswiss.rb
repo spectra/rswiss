@@ -94,7 +94,6 @@ class Player
 		end
 		return sum
 	end
-
 end
 
 # Class to represent a Match (this is used internally by Tournament)
@@ -147,8 +146,9 @@ class Tournament
 	class MatchNotCheckedOut < RuntimeError; def message; "This match has not been checked out!"; end; end
 	class EndOfTournament < RuntimeError; def message; "This tournament reached the end!"; end; end
 	class StillTied < RuntimeError; def message; "We have a difficult tie to break. Try flipping a coin."; end; end
-	class MaxRearranges < RuntimeError; def message; "Reached maximum number of rearrangements allowed (#{max_rearranges})."; end; end
-	class RepeatitionExhausted < RuntimeError; def message; "Allowing mqatch repetition as last resort was not enough."; end; end
+	class MaxRearranges < RuntimeError; def message; "Reached maximum number of rearrangements allowed."; end; end
+	class RepetitionExhausted < RuntimeError; def message; "Allowing match repetition as last resort was not enough."; end; end
+	class UnknownAlgorithm < RuntimeError; def message; "Match generation algorithm unknown."; end; end
 
 	attr_reader :round, :rounds, :checkedout_matches, :matches
 
@@ -170,7 +170,6 @@ class Tournament
 		@matches = (@players.length/2).floor
 		@rearranges = 0
 		@round = 0
-		@bye_factor = 0
 		@can_repeat_matches = [ true, false ].include?(allow_repeated_matches) ? allow_repeated_matches : false
 
 		# Match Maker
@@ -323,7 +322,6 @@ class Tournament
 
 		@mutex.synchronize {
 			this_round = []
-			@bye_factor = 1	                                  # Reset @bye_factor (just in case we need it)
 			@round == 0 ? @players.shuffle! : soft_rearrange! # round 0 is random
 
 			# Will we have a last unpaired player?
@@ -335,38 +333,10 @@ class Tournament
 				end
 			end
 
-			begin
-				gen_matches do |match|
-					this_round << match
-				end
-
-				# If we haven't generated enough matches, there might be a problem with our "classification"...
-				raise RuntimeError if this_round.length != @matches
-			rescue RuntimeError
-				# ... so we'll rearrange it the "hard" (and slow) way, trying to sort the problem out.
-				@rearranges += 1
-				if @rearranges < max_rearranges
-					# Not done with you yet, lady...
-					hard_rearrange!
-					this_round = []
-					retry
-				else
-					# Well... hard rearrangements have limitations... Let's see if we're allowed to repeat matches.
-					puts ">>> Here be dragons <<<"
-					if ! @can_repeat_matches
-						# Humpf... Be more flexible!
-						raise MaxRearranges
-					else
-						# Yes... we'll allow the generation of an already played match. Let's find out with one.
-						find_matches_to_repeat(this_round) do |match|
-							this_round << match
-						end
-						if this_round.length != @matches
-							# Well... we tried!
-							raise RepetitionExhausted
-						end
-					end
-				end
+			algorithm = 0
+			while this_round.length != @matches
+				this_round = gen_matches(algorithm)
+				algorithm += 1
 			end
 
 			# Great... we have generated enough matches for this round.
@@ -380,7 +350,7 @@ class Tournament
 		@players.sort! { |a, b| b.score <=> a.score }
 	end
 
-	# Hard (and slow) rearrange. This will shuffle the players with the same score.
+	# Hard (and slow) rearrange. This will shuffle the players in the same bracket.
 	def hard_rearrange!
 		scores = []
 		@players.each { |player| scores << player.score unless scores.include?(player.score) }
@@ -406,11 +376,12 @@ class Tournament
 		@players.length
 	end
 
-	# Generate matches inside a round (this is auxiliary function to #gen_next_round)
+	# Generate matches inside a round (this is auxiliary function to #checkout_match)
 	#
-	# block:: block to consume the matches while they're being produced.
-	def gen_matches(&block)
+	# algorithm:: 0 - direct; 1 - try hard_rearrange; 2 - try repetition of matches.
+	def gen_matches(algorithm)
 		played_this_turn = []
+		matches = []
 		@players.each do |p1|
 			next if played_this_turn.include?(p1)       # cannot play twice in the same round
 			next if p1.matches != @round                # exceeded number of matches in a round
@@ -422,9 +393,42 @@ class Tournament
 				next if p2.matches != @round              # exceeded number of matches in a round (e.g.: received a bye already)
 				played_this_turn << p1
 				played_this_turn << p2
-				yield Match.new(p1, p2)
+				matches << Match.new(p1, p2)
 				break
 			end
+		end
+
+		case algorithm
+			when 0 then
+				# Do nothing different.
+				return matches
+			when 1 then
+				# So we'll rearrange it the "hard" (and slow) way, trying to sort the problem out.
+				while @rearranges < max_rearranges and matches.length != @matches
+					@rearranges += 1
+					hard_rearrange!
+					matches = gen_matches(algorithm)
+				end
+				return matches
+			when 2 then
+				# Well... hard rearrangements have limitations... Let's see if we're allowed to repeat matches.
+				if ! @can_repeat_matches
+					# Humpf... Be more flexible!
+					raise MaxRearranges
+				else
+					# Yes... we'll allow the generation of an already played match. Let's find out with one.
+					find_matches_to_repeat(matches) do |match|
+						matches << match
+					end
+					if matches.length != @matches
+						# Well... we tried!
+						raise RepetitionExhausted
+					end
+				end
+				return matches
+			else
+				# Oops... using black magic?
+				raise UnknownAlgorithm
 		end
 	end
 
@@ -433,6 +437,7 @@ class Tournament
 	# round:: matches already generated in this round
 	# block:: the receiver of the matches.
 	def find_matches_to_repeat(round, &block)
+		puts ">>> Here be dragons <<<"
 		players = []
 		round.each do |match|
 			players << match.p1

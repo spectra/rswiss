@@ -11,14 +11,16 @@ while true
 	puts "\nNew tournment: #{tournament}. Repeating matches as last resort is <#{repeat_on ? "" : "not "}allowed>. Now is #{Time.now}."
 	while true
 		not_ended = false
+		message = ""
 		begin
 			m = t.checkout_match
-		rescue RuntimeError
+		rescue Tournament::EndOfTournament
 			# Some error like end of tournament
 			break
-		rescue StandardError
+		rescue Tournament::MaxRearranges, Tournament::RepetitionExhausted, Tournament::UnknownAlgorithm => e
 			# Fatal error
 			not_ended = true
+			message = e.message
 			break
 		end
 		rnd = rand(100)
@@ -54,7 +56,7 @@ while true
 			puts "This have to be decided by luck..."
 		end
 	else
-		puts "Something bad happened"
+		puts "Something bad happened: #{message}"
 		problems += 1
 	end
 	tournament += 1

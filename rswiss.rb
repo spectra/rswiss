@@ -4,7 +4,7 @@ require 'thread'
 class Player
 	class AlreadyByed < RuntimeError; def message; "Already received a bye!"; end; end
 
-	attr_reader :matches, :score, :id, :opponents, :c_score, :wins
+	attr_reader :matches, :score, :id, :c_score, :wins
 
 	# Initializes a new Player
 	#
@@ -28,26 +28,31 @@ class Player
 	end
 
 	# Mark a lost game
-	def lost
-		@matches += 1
+	def lost_to(opponent)
+		@mutex.synchronize {
+			@matches += 1
+			@opps_lost << opponent
+		}
 	end
 
 	# Mark a won game
-	def won
+	def won_over(opponent)
 		@mutex.synchronize {
 			@matches += 1
 			@score += 1.0
 			@c_score += @score
 			@wins += 1
+			@opps_won << opponent
 		}
 	end
 
 	# Mark a draw
-	def draw
+	def draw_against(opponent)
 		@mutex.synchronize {
 			@matches += 1
 			@score += 0.5
 			@c_score += @score
+			@opps_draw << opponent
 		}
 	end
 
@@ -63,21 +68,6 @@ class Player
 
 	# Have we received a bye?
 	def already_byed?; @byed; end
-
-	# Add an opponent to the list of opponents (important to calculate tie-breaking scores)
-	#
-	# outcome:: 0, 1 or 2 (see Match)
-	# opponent:: who I played against
-	def add_opponent(outcome, opponent)
-		case outcome
-			when 0 then
-				@opps_draw << opponent
-			when 1 then
-				@opps_won << opponent
-			when 2 then
-				@opps_lost << opponent
-		end
-	end
 
 	# Array of opponents
 	def opponents
@@ -105,24 +95,13 @@ class Player
 
 	# Calculate the Opponent's Cumulative Score
 	def opp_c_score
-		sum = 0
-		opponents.each do |opponent|
-			sum += opponent.c_score
-		end
-		return sum
+    opponents.inject(0) { |sum, opponent| sum + opponent.score }
 	end
 
 	# Calculate the Neustadtl Score
 	def neustadtl_score
-		defeated_sum = 0
-		@opps_won.each do |opponent|
-			defeated_sum += opponent.score
-		end
-
-		draw_sum = 0
-		@opps_draw.each do |opponent|
-			draw_sum += opponent.score
-		end
+		defeated_sum = @opps_won.inject(0)  { |sum, opponent| sum + opponent.score }
+		draw_sum     = @opps_draw.inject(0) { |sum, opponent| sum + opponent.score }
 
 		return defeated_sum + (draw_sum / 2)
 	end
@@ -154,20 +133,14 @@ class Match
 		# Decide the match
 		case outcome
 			when 1 then
-				@p1.won
-				@p2.lost
-				@p1.add_opponent(1, @p2)
-				@p2.add_opponent(2, @p1)
+				@p1.won_over(@p2)
+				@p2.lost_to(@p1)
 			when 2 then
-				@p1.lost
-				@p2.won
-				@p1.add_opponent(2, @p2)
-				@p2.add_opponent(1, @p1)
+				@p1.lost_to(@p2)
+				@p2.won_over(@p1)
 			when 0 then
-				@p1.draw
-				@p2.draw
-				@p1.add_opponent(0, @p2)
-				@p2.add_opponent(0, @p1)
+				@p1.draw_against(@p2)
+				@p2.draw_against(@p1)
 			else
 				raise ArgumentError, "A match can be decided by 0, 1 or 2."
 		end

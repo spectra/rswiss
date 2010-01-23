@@ -46,7 +46,7 @@ while true
 	end
 	
 	if ! not_ended
-		pp t.final_chart if players < 50
+		pp t.table_by_criteria if players < 50
 		begin
 			winner = t.winner
 			puts "The winner (by #{winner[1]}) is:"

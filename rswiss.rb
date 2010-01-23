@@ -4,7 +4,7 @@ require 'thread'
 class Player
 	class AlreadyByed < RuntimeError; def message; "Already received a bye!"; end; end
 
-	attr_reader :matches, :score, :id, :c_score, :wins
+	attr_reader :matches, :score, :id, :c_score, :wins, :criteria
 
 	# Initializes a new Player
 	#
@@ -24,7 +24,7 @@ class Player
 
 	# :nodoc:
 	def inspect
-		sprintf("#<%s:%#x @id=%d @matches=%d @byed=%s @score=%.1f @buchholz_score=%.1f @c_score=%.1f @opp_c_score=%.1f @wins=%d, @neustadtl_score=%.2f>", self.class.name, self.__id__, @id, @matches, @byed.inspect, @score, buchholz_score, @c_score, opp_c_score, @wins, neustadtl_score)
+		sprintf("#<%s:%#x @id=%d @matches=%d @byed=%s @score=%.1f @buchholz_score=%.1f @c_score=%.1f @opp_c_score=%.1f @wins=%d, @neustadtl_score=%.2f>", self.class.name, self.__id__.abs, @id, @matches, @byed.inspect, @score, buchholz_score, @c_score, opp_c_score, @wins, neustadtl_score)
 	end
 
 	# Mark a lost game
@@ -105,6 +105,7 @@ class Player
 
 		return defeated_sum + (draw_sum / 2)
 	end
+
 end
 
 # Class to represent a Match (this is used internally by Tournament)
@@ -180,6 +181,7 @@ class Tournament
 		@rearranges = 0
 		@round = 0
 		@can_repeat_matches = [ true, false ].include?(allow_repeated_matches) ? allow_repeated_matches : false
+		@criteria = [ :score, :buchholz_score, :neustadtl_score, :c_score, :opp_c_score, :wins ]
 
 		# Match Maker
 		@mutex = Mutex.new
@@ -248,87 +250,51 @@ class Tournament
 		}
 	end
 
+	# Return an array of the players sorted by criteria 
+	def table_by_criteria(criteria = nil)
+		criteria = @criteria if criteria.nil?
+
+		@players.sort do |a, b|
+			a_side = []
+			b_side = []
+			criteria.each do |func|
+				a_side << a.send(func)
+				b_side << b.send(func)
+			end
+			b_side <=> a_side
+		end
+	end
+
 	# Return an array of the players sorted by score
-	def final_chart
+	def table_by_score
 		@players.sort { |a, b| b.score <=> a.score }
-	end
-
-	# Get the first player with the highest score
-	def highest_score
-		chart = final_chart
-		chart[0].score
-	end
-
-	# Get the last player with the lowest score
-	def lowest_score
-		chart = final_chart
-		chart[-1].score
 	end
 
 	# Who is the winner?
 	#
 	# The winner is decided using some tie-breaking criteria if needed:
-	# Direct Score > Median Buchholz Score > Neustadtl Score > Cumulative Score > Opponent's Cumulative Score > Number of Wins
 	#
 	# An array is returned with the winner and the criteria used.
 	# An Exception is raised if the tie is too hard to break.
-	def winner
-		# Decide the winner just by the score
-		target = highest_score
-		top_player0 = @players.reject { |player| player.score < target }
-		if top_player0.length == 1
-			# Great! We have a winner!
-			return [ top_player0[0], "Conventional Score" ]
+	def winner(criteria = nil)
+		criteria = @criteria if criteria.nil?
+
+		top_players = @players
+		while ! criteria.empty?
+			this_time_criteria = criteria.shift
+			scores = []
+			top_players.each do |player|
+				scores << player.send(this_time_criteria)
+			end
+			top_players.reject! { |player| player.send(this_time_criteria) < scores.max }
+			if top_players.length == 1
+				# Great! We have a winner!
+				return [ top_players[0], this_time_criteria ]
+			end
 		end
 
-		# First tie-break criteria: Buchholz score
-		buchholz_scores = []
-		top_player0.each do |player|
-			buchholz_scores << player.buchholz_score
-		end
-		top_player1 = top_player0.reject { |player| player.buchholz_score < buchholz_scores.max }
-		if top_player1.length == 1
-			# Great! We have a winner!
-			return [ top_player1[0], "Buchholz Score" ]
-		end
-
-		# Second tie-break criteria: Neustadtl Score
-		neustadtl_scores = []
-		top_player1.each { |player| neustadtl_scores << player.neustadtl_score }
-		top_player2 = top_player1.reject { |player| player.neustadtl_score < neustadtl_scores.max }
-		if top_player2.length == 1
-			# Great! We have a winner!
-			return [ top_player2[0], "Neustadtl Score" ]
-		end
-
-		# Third tie-break criteria: Cumulative Score
-		c_scores = []
-		top_player2.each { |player| c_scores << player.c_score }
-		top_player3 = top_player2.reject { |player| player.c_score < c_scores.max }
-		if top_player3.length == 1
-			# Great! We have a winner!
-			return [ top_player3[0], "Cumulative Score" ]
-		end
-
-		# Fourth tie-break criteria: Opponent's Cumulative Score
-		opp_c_scores = []
-		top_player3.each { |player| opp_c_scores << player.opp_c_score }
-		top_player4 = top_player3.reject { |player| player.opp_c_score < opp_c_scores.max }
-		if top_player4.length == 1
-			# Great! We have a winner!
-			return [ top_player4[0], "Opponent's Cumulative Score" ]
-		end
-
-		# Fifth tie-breaking criteria: Number of Wins
-		wins = []
-		top_player4.each { |player| wins << player.wins }
-		top_player5 = top_player4.reject { |player| player.wins < wins.max }
-		if top_player5.length == 1
-			# Great! We have a winner!
-			return [ top_player5[0], "Number of Wins" ]
-		else
-			raise StillTied
-		end
+		# If got here, we have no winner
+		raise StillTied
 	end
 
 	private
@@ -365,7 +331,7 @@ class Tournament
 
 	# Simple rearrangement based on sorting the array of players.
 	def soft_rearrange!
-		@players.sort! { |a, b| b.score <=> a.score }
+		@players = table_by_score
 	end
 
 	# Hard (and slow) rearrange. This will shuffle the players in the same bracket.

@@ -278,24 +278,24 @@ class Tournament
 		top_player0 = @players.reject { |player| player.score < target }
 		if top_player0.length == 1
 			# Great! We have a winner!
-			return [ top_player0[0], "Direct Score" ]
+			return [ top_player0[0], "Conventional Score" ]
 		end
 
 		# First tie-break criteria: Buchholz score
-		scores = []
+		buchholz_scores = []
 		top_player0.each do |player|
-			scores << player.buchholz_score
+			buchholz_scores << player.buchholz_score
 		end
-		top_player1 = top_player0.reject { |player| player.buchholz_score < scores.max }
+		top_player1 = top_player0.reject { |player| player.buchholz_score < buchholz_scores.max }
 		if top_player1.length == 1
 			# Great! We have a winner!
 			return [ top_player1[0], "Buchholz Score" ]
 		end
 
 		# Second tie-break criteria: Neustadtl Score
-		n_scores = []
-		top_player1.each { |player| n_scores << player.neustadtl_score }
-		top_player2 = top_player1.reject { |player| player.neustadtl_score < n_scores.max }
+		neustadtl_scores = []
+		top_player1.each { |player| neustadtl_scores << player.neustadtl_score }
+		top_player2 = top_player1.reject { |player| player.neustadtl_score < neustadtl_scores.max }
 		if top_player2.length == 1
 			# Great! We have a winner!
 			return [ top_player2[0], "Neustadtl Score" ]

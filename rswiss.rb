@@ -200,7 +200,6 @@ class Tournament
 		! (@players.detect { |player| player.id == id }).nil?
 	end
 
-
 	# Have we reached the end of the tournament?
 	def ended?
 		@round >= @rounds and @checkedout_matches.empty? and @generated_matches.empty?
@@ -223,8 +222,13 @@ class Tournament
 
 	# Commit a checked-out match back in
 	#
-	# match:: a Match
+	# match:: a Match (can be an array in the form [p1_id, p2_id, result]
 	def commit_match(match)
+		if match.kind_of?(Array)
+			m = Match.new(get_player_by_id(match[0]), get_player_by_id(match[1]))
+			m.decide(match[2])
+			match = m
+		end
 		raise ArgumentError, "This match doesn't have a result yet!" if match.result.nil?
 		raise MatchExists if has_match?(match.p1, match.p2) and ! @can_repeat_matches
 		raise EndOfTournament if ended?
@@ -449,6 +453,10 @@ class Tournament
 				yield Match.new(match.p1, match.p2)
 			end
 		end
+	end
+
+	def get_player_by_id(player_id)
+		@players.detect { |player| player.id == player_id }
 	end
 
 end # of class Tournament

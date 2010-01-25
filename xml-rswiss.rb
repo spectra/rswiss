@@ -26,9 +26,8 @@ class XMLRSwiss
 				when :commit_match then
 					tournament_id = args[0]
 					match_arr = args[1]
-					result = args[2]
-					match = RSwiss::Match.new(*match_arr)
-					match.decide(result)
+					match_arr << args[2]
+					match = RSwiss::Match.new(match_arr)
 					@tournaments[tournament_id].commit_match(match)
 					retval = true
 				when :has_ended then

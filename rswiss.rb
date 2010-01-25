@@ -1,9 +1,9 @@
 require 'thread'
 
+module RSwiss
+
 # Class to represent a Player (this is used internally by Tournament)
 class Player
-	class AlreadyByed < RuntimeError; def message; "Already received a bye!"; end; end
-
 	attr_reader :matches, :score, :id, :c_score, :wins, :criteria
 
 	# Initializes a new Player
@@ -106,12 +106,10 @@ class Player
 		return defeated_sum + (draw_sum / 2)
 	end
 
-end
+end # of class Player
 
 # Class to represent a Match (this is used internally by Tournament)
 class Match
-	class AlreadyDecided < RuntimeError; def message; "This match is already decided!"; end; end
-
 	attr_reader :p1, :p2, :result, :initial_score
 
 	# Initializes a new Match
@@ -147,19 +145,9 @@ class Match
 		end
 		@result = outcome
 	end
-end
+end # of class Match
 
 class Tournament
-	class RepeatedPlayersIds < RuntimeError; def message; "Repeated player ids detected!"; end; end
-	class PlayerExists < RuntimeError; def message; "This player already exist!"; end; end
-	class MatchExists < RuntimeError; def message; "This match already exist!"; end; end
-	class MatchNotCheckedOut < RuntimeError; def message; "This match has not been checked out!"; end; end
-	class EndOfTournament < RuntimeError; def message; "This tournament reached the end!"; end; end
-	class StillTied < RuntimeError; def message; "We have a difficult tie to break. Try flipping a coin."; end; end
-	class MaxRearranges < RuntimeError; def message; "Reached maximum number of rearrangements allowed."; end; end
-	class RepetitionExhausted < RuntimeError; def message; "Allowing match repetition as last resort was not enough."; end; end
-	class UnknownAlgorithm < RuntimeError; def message; "Match generation algorithm unknown."; end; end
-
 	attr_reader :round, :rounds, :checkedout_matches, :matches
 
 	# Initializes a new tournament
@@ -167,7 +155,7 @@ class Tournament
 	# players_array:: array of player ids.
 	# allow_repeated_matches:: boolean defining if we allow repeating matches as last resort (default: false).
 	def initialize(players_array, allow_repeated_matches = false)
-		raise RepeatedPlayerIds if players_array != players_array.uniq
+		raise RepeatedPlayersIds if players_array != players_array.uniq
 
 		# Populate our array of players
 		@players = []
@@ -277,6 +265,7 @@ class Tournament
 	# An array is returned with the winner and the criteria used.
 	# An Exception is raised if the tie is too hard to break.
 	def winner(criteria = nil)
+		raise StillRunning unless ended?
 		criteria = @criteria if criteria.nil?
 
 		top_players = @players
@@ -295,6 +284,24 @@ class Tournament
 
 		# If got here, we have no winner
 		raise StillTied
+	end
+
+	# Converts a table of players in an ordered array with all the criterias
+	#
+	# table:: the table
+	# criteria:: the list of criterias to be included (assume the default if not given)
+	def table2array(table, criteria = nil)
+		criteria = @criteria if criteria.nil?
+		ret = []
+		table.each do |player|
+			line = []
+			line << player.id
+			criteria.each do |func|
+				line << player.send(func)
+			end
+			ret << line
+		end
+		return ret
 	end
 
 	private
@@ -444,6 +451,26 @@ class Tournament
 		end
 	end
 
-end
+end # of class Tournament
+
+# Player Exceptions
+class AlreadyByed < RuntimeError; def message; "Already received a bye!"; end; end
+
+# Match Exceptions
+class AlreadyDecided < RuntimeError; def message; "This match is already decided!"; end; end
+
+# Tournament Exceptions
+class RepeatedPlayersIds < RuntimeError; def message; "Repeated player ids detected!"; end; end
+class PlayerExists < RuntimeError; def message; "This player already exist!"; end; end
+class MatchExists < RuntimeError; def message; "This match already exist!"; end; end
+class MatchNotCheckedOut < RuntimeError; def message; "This match has not been checked out!"; end; end
+class EndOfTournament < RuntimeError; def message; "This tournament reached the end!"; end; end
+class StillTied < RuntimeError; def message; "We have a difficult tie to break. Try flipping a coin."; end; end
+class StillRunning < RuntimeError; def message; "The Tournament has not ended yet."; end; end
+class MaxRearranges < RuntimeError; def message; "Reached maximum number of rearrangements allowed."; end; end
+class RepetitionExhausted < RuntimeError; def message; "Allowing match repetition as last resort was not enough."; end; end
+class UnknownAlgorithm < RuntimeError; def message; "Match generation algorithm unknown."; end; end
+
+end # of module RSwiss
 
 # vim: set ts=2:

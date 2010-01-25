@@ -7,17 +7,17 @@ problems = 0
 workarounds = 0
 while true
 	p = [];0.upto(players) { |n| p << n }
-	t = Tournament.new(p, repeat_on)
+	t = RSwiss::Tournament.new(p, repeat_on)
 	puts "\nNew tournment: #{tournament}. Repeating matches as last resort is <#{repeat_on ? "" : "not "}allowed>. Now is #{Time.now}."
 	while true
 		not_ended = false
 		message = ""
 		begin
 			m = t.checkout_match
-		rescue Tournament::EndOfTournament
+		rescue RSwiss::EndOfTournament
 			# Some error like end of tournament
 			break
-		rescue Tournament::MaxRearranges, Tournament::RepetitionExhausted, Tournament::UnknownAlgorithm => e
+		rescue RSwiss::MaxRearranges, RSwiss::RepetitionExhausted, RSwiss::UnknownAlgorithm => e
 			# Fatal error
 			not_ended = true
 			message = e.message
@@ -52,7 +52,7 @@ while true
 			puts "The winner (by #{winner[1]}) is:"
 			pp winner[0]
 			workarounds += t.repeated_matches
-		rescue RuntimeError
+		rescue RSwiss::StillTied
 			puts "This have to be decided by luck..."
 		end
 	else

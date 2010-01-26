@@ -27,8 +27,7 @@ class XMLRSwiss
 					tournament_id = args[0]
 					match_arr = args[1]
 					match_arr << args[2]
-					match = RSwiss::Match.new(match_arr)
-					@tournaments[tournament_id].commit_match(match)
+					@tournaments[tournament_id].commit_match(match_arr)
 					retval = true
 				when :has_ended then
 					tournament_id = args[0]
@@ -45,13 +44,21 @@ class XMLRSwiss
 					tournament_id = args[0]
 					winner = @tournaments[tournament_id].winner
 					retval = [ winner[0].id, winner[1].to_s ]
+				when :repeated_matches then
+					tournament_id = args[0]
+					retval = @tournaments[tournament_id].repeated_matches
+				when :checkedout_matches then
+					tournament_id = args[0]
+					retval = []
+					@mutex.synchronize {
+						@tournaments[tournament_id].checkedout_matches.each do |match|
+							retval << [match.p1, match.p2]
+						end
+					}
 			end
 		rescue RSwiss::RepeatedPlayersIds => e
 			# Raised from Tournament.new
 			raise XMLRPC::FaultException.new(101, e.message)
-		rescue RuntimeError => e
-			# Raised from #gen_next_round (from #checkout_match)
-			raise XMLRPC::FaultException.new(201, e.message)
 		rescue RSwiss::EndOfTournament => e
 			# Raised from #gen_next_round (from #checkout_match) or from #commit_match
 			raise XMLRPC::FaultException.new(202, e.message)
@@ -70,6 +77,9 @@ class XMLRSwiss
 		rescue RSwiss::StillTied => e
 			# Raised from #winner
 			raise XMLRPC::FaultException.new(402, e.message)
+		rescue RuntimeError => e
+			# Raised from #gen_next_round (from #checkout_match)
+			raise XMLRPC::FaultException.new(201, e.message)
 		end
 		return retval
 	end
@@ -101,6 +111,14 @@ class XMLRSwiss
 
 	def winner(tournament_id)
 		dispatcher(:winner, tournament_id)
+	end
+
+	def checkedout_matches(tournament_id)
+		dispatcher(:checkedout_matches, tournament_id)
+	end
+
+	def repeated_matches(tournament_id)
+		dispatcher(:repeated_matches, tournament_id)
 	end
 
 end # of class XMLRSwiss

@@ -222,23 +222,26 @@ class Tournament
 
 	# Commit a checked-out match back in
 	#
-	# match:: a Match (can be an array in the form [p1_id, p2_id, result]
-	def commit_match(match)
-		if match.kind_of?(Array)
-			m = Match.new(get_player_by_id(match[0]), get_player_by_id(match[1]))
-			m.decide(match[2])
-			match = m
+	# match_or_array:: a Match (can be an array in the form [p1_id, p2_id, result]
+	def commit_match(match_or_array)
+		if match_or_array.kind_of?(Array)
+			match = get_match_by_p1_and_p2(@checkedout_matches, match_or_array[0], match_or_array[1])
+			raise MatchNotCheckedOut if match.nil?
+			if match.result.nil?
+				match.decide(match_or_array[2])
+			else
+				raise ArgumentError, "Two different results for the same match!" if match.result != match_or_array[2]
+			end
+		else
+			match = match_or_array
+			raise ArgumentError, "This match doesn't have a result yet!" if match.result.nil?
 		end
-		raise ArgumentError, "This match doesn't have a result yet!" if match.result.nil?
 		raise MatchExists if has_match?(match.p1, match.p2) and ! @can_repeat_matches
 		raise EndOfTournament if ended?
-		unless @checkedout_matches.detect { |m| (m.p1.id == match.p1.id and m.p2.id == match.p2.id) or (m.p2.id == match.p1.id and m.p1.id == match.p2.id) }
-			raise MatchNotCheckedOut
-		end
 
 		@mutex.synchronize { 
 			@committed_matches << match
-			@checkedout_matches.delete_if { |m| (m.p1.id == match.p1.id and m.p2.id == match.p2.id) or (m.p2.id == match.p1.id and m.p1.id == match.p2.id) }
+			@checkedout_matches.delete(match)
 		}
 	end
 
@@ -459,25 +462,29 @@ class Tournament
 		@players.detect { |player| player.id == player_id }
 	end
 
+	def get_match_by_p1_and_p2(array, p1_id, p2_id)
+		array.detect { |m| (m.p1.id == p1_id and m.p2.id == p2_id) or (m.p2.id == p1_id and m.p1.id == p2_id) }
+	end
+
 end # of class Tournament
 
 # Player Exceptions
-class AlreadyByed < RuntimeError; def message; "Already received a bye!"; end; end
+class AlreadyByed < Exception; def message; "Already received a bye!"; end; end
 
 # Match Exceptions
-class AlreadyDecided < RuntimeError; def message; "This match is already decided!"; end; end
+class AlreadyDecided < Exception; def message; "This match is already decided!"; end; end
 
 # Tournament Exceptions
-class RepeatedPlayersIds < RuntimeError; def message; "Repeated player ids detected!"; end; end
-class PlayerExists < RuntimeError; def message; "This player already exist!"; end; end
-class MatchExists < RuntimeError; def message; "This match already exist!"; end; end
-class MatchNotCheckedOut < RuntimeError; def message; "This match has not been checked out!"; end; end
-class EndOfTournament < RuntimeError; def message; "This tournament reached the end!"; end; end
-class StillTied < RuntimeError; def message; "We have a difficult tie to break. Try flipping a coin."; end; end
-class StillRunning < RuntimeError; def message; "The Tournament has not ended yet."; end; end
-class MaxRearranges < RuntimeError; def message; "Reached maximum number of rearrangements allowed."; end; end
-class RepetitionExhausted < RuntimeError; def message; "Allowing match repetition as last resort was not enough."; end; end
-class UnknownAlgorithm < RuntimeError; def message; "Match generation algorithm unknown."; end; end
+class RepeatedPlayersIds < Exception; def message; "Repeated player ids detected!"; end; end
+class PlayerExists < Exception; def message; "This player already exist!"; end; end
+class MatchExists < Exception; def message; "This match already exist!"; end; end
+class MatchNotCheckedOut < Exception; def message; "This match has not been checked out!"; end; end
+class EndOfTournament < Exception; def message; "This tournament reached the end!"; end; end
+class StillTied < Exception; def message; "We have a difficult tie to break. Try flipping a coin."; end; end
+class StillRunning < Exception; def message; "The Tournament has not ended yet."; end; end
+class MaxRearranges < Exception; def message; "Reached maximum number of rearrangements allowed."; end; end
+class RepetitionExhausted < Exception; def message; "Allowing match repetition as last resort was not enough."; end; end
+class UnknownAlgorithm < Exception; def message; "Match generation algorithm unknown."; end; end
 
 end # of module RSwiss
 

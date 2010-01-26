@@ -42,11 +42,13 @@ while true
 				m.decide(1)
 			end
 		end
-		t.commit_match(m)
+		t.commit_match([m.p1.id, m.p2.id, m.result])
+#		t.commit_match(m)
 	end
 	
 	if ! not_ended
 		pp t.table_by_criteria if players < 50
+#		pp t.table2array(t.table_by_criteria) if players < 50
 		begin
 			winner = t.winner
 			puts "The winner (by #{winner[1]}) is:"

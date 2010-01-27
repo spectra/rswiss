@@ -2,6 +2,7 @@ require 'rswiss.rb'
 require 'pp'
 players = ARGV[0].to_i
 repeat_on = (ARGV.length > 1)
+marshal_test = true
 tournament = 0
 problems = 0
 workarounds = 0
@@ -44,6 +45,11 @@ while true
 		end
 		t.commit_match([m.p1.id, m.p2.id, m.result])
 #		t.commit_match(m)
+		if marshal_test
+			puts ">>> Marshal test going on..."
+			s = Marshal.dump(t)
+			t = Marshal.load(s)
+		end
 	end
 	
 	if ! not_ended

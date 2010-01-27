@@ -23,6 +23,17 @@ class Player
 	end
 
 	# :nodoc:
+	def marshal_dump
+		[ @id, @score, @matches, @byed, @opps_lost, @opps_draw, @opps_won, @c_score, @wins ]
+	end
+
+	# :nodoc:
+	def marshal_load(args)
+		@id, @score, @matches, @byed, @opps_lost, @opps_draw, @opps_won, @c_score, @wins = args
+		@mutex = Mutex.new
+	end
+
+	# :nodoc:
 	def inspect
 		sprintf("#<%s:%#x @id=%d @matches=%d @byed=%s @score=%.1f @buchholz_score=%.1f @c_score=%.1f @opp_c_score=%.1f @wins=%d, @neustadtl_score=%.2f>", self.class.name, self.__id__.abs, @id, @matches, @byed.inspect, @score, buchholz_score, @c_score, opp_c_score, @wins, neustadtl_score)
 	end
@@ -123,6 +134,16 @@ class Match
 		@result = nil
 	end
 
+	# :nodoc:
+	def marshal_dump
+		[ @p1, @p2, @initial_score, @result ]
+	end
+
+	# :nodoc:
+	def marshal_load(args)
+		@p1, @p2, @initial_score, @result = args
+	end
+
 	# Decide the match
 	#
 	# outcome:: 0 for draw, 1 for p1 wins, 2 for p2 wins
@@ -178,6 +199,49 @@ class Tournament
 		@committed_matches = []
 		@repeated_matches = []
 	end
+
+	# :nodoc:
+	def marshal_dump
+		[ @players, @rounds, @matches, @rearranges, @round, @can_repeat_matches, @criteria, @generated_matches, @checkedout_matches, @committed_matches, @repeated_matches ]
+	end
+
+	# :nodoc:
+	def marshal_load(args)
+		@mutex = Mutex.new
+		@mutex.lock
+
+		@players, @rounds, @matches, @rearranges, @round, @can_repeat_matches, @criteria, @generated_matches, @checkedout_matches, @committed_matches, @repeated_matches = args
+
+		# Regenerate match arrays with our players
+		[ @generated_matches, @checkedout_matches, @committed_matches ].each do |array|
+			new_array = []
+			array.each do |match|
+				p1 = @players.detect { |player| player.id == match.p1.id }
+				p2 = @players.detect { |player| player.id == match.p2.id }
+
+				# Pass if it is the same object
+				next if match.p1.object_id == p1.object_id and match.p2.object_id == p2.object_id
+
+				# Act otherwise
+				new_match = RSwiss::Match.new(p1, p2)
+				new_match.decide(match.result) unless match.result.nil?
+				new_array << new_match
+			end
+			array = new_array
+		end
+
+		# Regenerate repeated_matches array with our players
+		new_array = []
+		@repeated_matches.each do |pair|
+			p1 = @players.detect { |player| player.id == pair[0].id }
+			p2 = @players.detect { |player| player.id == pair[1].id }
+			new_array << [p1, p2]
+		end
+		@repeated_matches = new_array
+
+		@mutex.unlock
+	end
+
 
 	# Get the number of repeated matches
 	def repeated_matches

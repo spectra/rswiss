@@ -9,7 +9,7 @@ while true
 	p = [];0.upto(players) { |n| p << n }
 	client = XMLRPC::Client.new2("http://localhost:9090/")
 	t_id = client.call("matchmaker.create_tournament", p, repeat_on)
-	puts "\nNew tournment: #{tournament}. Repeating matches as last resort is <#{repeat_on ? "" : "not "}allowed>. Now is #{Time.now}."
+	puts "\nNew tournment: #{tournament} (id = #{t_id}). Repeating matches as last resort is <#{repeat_on ? "" : "not "}allowed>. Now is #{Time.now}."
 	while true
 		not_ended = false
 		message = ""

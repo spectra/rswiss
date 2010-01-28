@@ -1,11 +1,15 @@
 require 'rswiss'
 require 'xmlrpc/server'
+require 'pstore'
 
 class XMLRSwiss
 
-	def initialize
-		@tournaments = []
-		@mutex = Mutex.new
+	def initialize(file = nil)
+		@file = file.nil? ? "/tmp/XMLRSwiss.#{$$}.pstore" : file
+		@pstore = PStore.new(@file)
+		@pstore.transaction {
+			@pstore[:tournaments] ||= Array.new
+		}
 	end
 
 	def dispatcher(method, *args, &block)
@@ -15,43 +19,59 @@ class XMLRSwiss
 				when :create_tournament then
 					players = args[0]
 					repeat_on = args[1]
-					@mutex.synchronize {
-						@tournaments << RSwiss::Tournament.new(players, repeat_on)
-						retval = (@tournaments.length - 1)
+					@pstore.transaction {
+						@pstore[:tournaments] << RSwiss::Tournament.new(players, repeat_on)
+						retval = (@pstore[:tournaments].length - 1)
 					}
 				when :checkout_match then
 					tournament_id = args[0]
-					match = @tournaments[tournament_id].checkout_match
-					retval = [ match.p1.id, match.p2.id ]
+					@pstore.transaction {
+						match = @pstore[:tournaments][tournament_id].checkout_match
+						retval = [ match.p1.id, match.p2.id ]
+					}
 				when :commit_match then
 					tournament_id = args[0]
 					match_arr = args[1]
 					match_arr << args[2]
-					@tournaments[tournament_id].commit_match(match_arr)
+					@pstore.transaction {
+						@pstore[:tournaments][tournament_id].commit_match(match_arr)
+					}
 					retval = true
 				when :has_ended then
 					tournament_id = args[0]
-					retval = @tournaments[tournament_id].ended?
+					@pstore.transactio(true) {
+						retval = @pstore[:tournaments][tournament_id].ended?
+					}
 				when :table_by_score then
 					tournament_id = args[0]
-					table = @tournaments[tournament_id].table_by_score
-					retval = @tournaments[tournament_id].table2array(table)
+					@pstore.transaction(true) {
+						table = @pstore[:tournaments][tournament_id].table_by_score
+						retval = @pstore[:tournaments][tournament_id].table2array(table)
+					}
 				when :table_by_criteria then
 					tournament_id = args[0]
-					table = @tournaments[tournament_id].table_by_criteria
-					retval = @tournaments[tournament_id].table2array(table)
+					@pstore.transaction(true) {
+						table = @pstore[:tournaments][tournament_id].table_by_criteria
+						retval = @pstore[:tournaments][tournament_id].table2array(table)
+					}
 				when :winner then
 					tournament_id = args[0]
-					winner = @tournaments[tournament_id].winner
-					retval = [ winner[0].id, winner[1].to_s ]
+					@pstore.transaction(true) {
+						winner = @pstore[:tournaments][tournament_id].winner
+						retval = [ winner[0].id, winner[1].to_s ]
+						puts ">>>>>"
+						puts @pstore[:tournaments]
+					}
 				when :repeated_matches then
 					tournament_id = args[0]
-					retval = @tournaments[tournament_id].repeated_matches
+					@pstore.transaction(true) {
+						retval = @pstore[:tournaments][tournament_id].repeated_matches
+					}
 				when :checkedout_matches then
 					tournament_id = args[0]
 					retval = []
-					@mutex.synchronize {
-						@tournaments[tournament_id].checkedout_matches.each do |match|
+					@pstore.transaction(true) {
+						@pstore[:tournaments][tournament_id].checkedout_matches.each do |match|
 							retval << [match.p1, match.p2]
 						end
 					}
@@ -125,5 +145,5 @@ end # of class XMLRSwiss
 
 s = XMLRPC::Server.new(9090)
 s.add_introspection
-s.add_handler("matchmaker", XMLRSwiss.new)
+s.add_handler("matchmaker", XMLRSwiss.new(ARGV[0]))
 s.serve

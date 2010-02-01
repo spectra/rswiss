@@ -46,20 +46,20 @@ class XMLRSwiss
 					retval = true
 				when :has_ended then
 					tournament_id = args[0]
-					@pstore.transactio(true) {
+					@pstore.transaction(true) {
 						retval = @pstore[:tournaments][tournament_id].ended?
 					}
 				when :table_by_score then
 					tournament_id = args[0]
 					@pstore.transaction(true) {
 						table = @pstore[:tournaments][tournament_id].table_by_score
-						retval = @pstore[:tournaments][tournament_id].table2array(table)
+						retval = @pstore[:tournaments][tournament_id].table2array(table, true)
 					}
 				when :table_by_criteria then
 					tournament_id = args[0]
 					@pstore.transaction(true) {
 						table = @pstore[:tournaments][tournament_id].table_by_criteria
-						retval = @pstore[:tournaments][tournament_id].table2array(table)
+						retval = @pstore[:tournaments][tournament_id].table2array(table, true)
 					}
 				when :winner then
 					tournament_id = args[0]
@@ -79,7 +79,7 @@ class XMLRSwiss
 					retval = []
 					@pstore.transaction(true) {
 						@pstore[:tournaments][tournament_id].checkedout_matches.each do |match|
-							retval << [match.p1, match.p2]
+							retval << [match.p1.id, match.p2.id]
 						end
 					}
 			end
@@ -150,7 +150,7 @@ class XMLRSwiss
 
 end # of class XMLRSwiss
 
-s = XMLRPC::Server.new(9090)
+s = XMLRPC::Server.new(9090, "0.0.0.0")
 s.add_introspection
 s.add_handler("matchmaker", XMLRSwiss.new(ARGV[0]))
 s.serve

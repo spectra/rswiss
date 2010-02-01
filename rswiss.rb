@@ -367,13 +367,15 @@ class Tournament
 	# Converts a table of players in an ordered array with all the criterias
 	#
 	# table:: the table
+	# add_played_matches:: boolean. If true, add the number of matches that player played already as second element of the array.
 	# criteria:: the list of criterias to be included (assume the default if not given)
-	def table2array(table, criteria = nil)
+	def table2array(table, add_played_matches = false, criteria = nil)
 		criteria = @criteria if criteria.nil?
 		ret = []
 		table.each do |player|
 			line = []
 			line << player.id
+			line << player.matches if add_played_matches
 			criteria.each do |func|
 				line << player.send(func)
 			end

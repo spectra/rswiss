@@ -1,10 +1,17 @@
+# ----------------------------------------------------------------------
+# "THE BEER-WARE LICENSE" (Revision 43):
+# <pablo@propus.com.br> wrote this file and it's provided AS-IS, no
+# warranties. As long as you retain this notice you can do whatever you
+# want with this stuff. If we meet some day, and you think this stuff is
+# worth it, you can buy me a beer in return."
+# ----------------------------------------------------------------------
 require 'thread'
 
 module RSwiss
 
 # Class to represent a Player (this is used internally by Tournament)
 class Player
-	attr_reader :matches, :score, :id, :c_score, :wins, :criteria
+	attr_reader :matches, :score, :id, :c_score, :wins
 
 	# Initializes a new Player
 	#
@@ -169,7 +176,7 @@ class Match
 end # of class Match
 
 class Tournament
-	attr_reader :round, :rounds, :checkedout_matches, :matches
+	attr_reader :round, :rounds, :checkedout_matches, :matches, :criteria
 
 	# Initializes a new tournament
 	#

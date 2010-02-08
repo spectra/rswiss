@@ -173,6 +173,17 @@ class Match
 		end
 		@result = outcome
 	end
+
+	# Convert the match to the array format
+	#
+	# only_player_ids:: boolean. If true returns just the player id (and not its object). Default: false
+	def to_a(only_player_ids = false)
+		if only_player_ids
+			[ @p1.id, @p2.id, @result ]
+		else
+			[ @p1, @p2, @result ]
+		end
+	end
 end # of class Match
 
 class Tournament
@@ -334,6 +345,34 @@ class Tournament
 	# Return an array of the players sorted by score
 	def table_by_score
 		@players.sort { |a, b| b.score <=> a.score }
+	end
+
+	# Return an array with the rounds of played matches
+	#
+	# pad:: boolean. If true, return a full array with not-yet-played matches replaced by nil. (Default: false)
+	# match_array:: boolean. If true, return matches in the array format ([p1, p2, result]. (Default: false)
+	def match_table(pad = false, match_array=false)
+		ret = []
+		line = []
+		@committed_matches.each do |match|
+			if line.length == @matches
+				ret << line
+				line = []
+			end
+			if match_array
+				line << match.to_a(true)
+			else
+				line << match
+			end
+		end
+		if pad
+			while ret.length != @rounds
+				line << nil while line.length != @matches
+				ret << line
+				line = []
+			end
+		end
+		return ret
 	end
 
 	# Who is the winner?

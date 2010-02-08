@@ -50,8 +50,8 @@ while true
 				m.decide(1)
 			end
 		end
-		t.commit_match([m.p1.id, m.p2.id, m.result])
-#		t.commit_match(m)
+#		t.commit_match([m.p1.id, m.p2.id, m.result])
+		t.commit_match(m)
 		if marshal_test
 			puts ">>> Marshal test going on..."
 			s = Marshal.dump(t)

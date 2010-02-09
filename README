@@ -106,9 +106,12 @@ XML-RPC
 
 The "xml-rswiss.rb" is a simple XML-RPC server that accepts the creation of
 tournaments and all the interface to exchange matches with a XML-RPC client.
-As with "rswiss.rb", this also have a test in "xml-test.rb", that actually
-does the same "test.rb" does, but acting as a XML-RPC client to
-"xml-rswiss.rb" server.
+You can use it by running "simple_serve.rb" (for the native XMLRPC server that
+ships with Ruby) or as a Rack app - try running "rack_serve.ru". As with
+"rswiss.rb", this also have a test in "xml-test.rb", that actually does the
+same "test.rb" does, but acting as a XML-RPC client to "xml-rswiss.rb" server.
+If you're using the Rack version with "xml-test.rb", run it with "-p 9090" (or
+change the source for "xml-test.rb").
 
 
 Marshalling and Persistence

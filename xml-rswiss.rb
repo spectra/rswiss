@@ -6,7 +6,6 @@
 # worth it, you can buy me a beer in return."
 # ----------------------------------------------------------------------
 require 'rswiss'
-require 'xmlrpc/server'
 require 'pstore'
 
 class XMLRSwiss
@@ -149,8 +148,3 @@ class XMLRSwiss
 	end
 
 end # of class XMLRSwiss
-
-s = XMLRPC::Server.new(9090, "0.0.0.0")
-s.add_introspection
-s.add_handler("matchmaker", XMLRSwiss.new(ARGV[0]))
-s.serve

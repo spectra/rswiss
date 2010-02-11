@@ -65,8 +65,6 @@ class XMLRSwiss
 					@pstore.transaction(true) {
 						winner = @pstore[:tournaments][tournament_id].winner
 						retval = [ winner[0].id, winner[1].to_s ]
-						puts ">>>>>"
-						puts @pstore[:tournaments]
 					}
 				when :repeated_matches then
 					tournament_id = args[0]

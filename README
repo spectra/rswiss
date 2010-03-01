@@ -11,7 +11,7 @@ RSwiss
 
 This is a simple implementation of Swiss Tournament (actually it's more like
 a "King of The Hill" Tournament) focused on simplicity and no manual
-interaction. The goal is to generate de simplest thing that could possible
+interaction. The goal is to generate the simplest thing that could possible
 work (and not replace FIDE rules - if you're thinking about chess - or any
 other software dealing with the same issue).
 
@@ -76,7 +76,13 @@ When this happens, the only way to break out of it is to throw everything
 away and start over (not a good thing). Well... there's, of course, less
 destructive measures, but it requires bending the rules a little.
 
-When creating a new tournament, the second argument to RSwiss::Tournament is
+By default, RSwiss generates just the number of rounds that ensure a fairly
+evaluated tournament (the binary logarithm of the number of players). The
+second argument to RSwiss::Tournament is the number of additional rounds to be
+generated (just in case you need to "overevaluate" your tournament). Use this
+feature with care...
+
+When creating a new tournament, the third argument to RSwiss::Tournament is
 a bloolean flag. When set to "true", it will allow one of the previous
 matches to be repeated as a way to break the deadlock. This can only happen
 once for each match. In my experience, when it happens is also usually

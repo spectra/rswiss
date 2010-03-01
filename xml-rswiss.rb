@@ -22,11 +22,17 @@ class XMLRSwiss
 		retval = nil
 		begin
 			case method
+				when :is_tournament then
+					tournament_id = args[0]
+					@pstore.transaction {
+						retval = (@pstore[:tournaments].length > tournament_id);
+					}
 				when :create_tournament then
 					players = args[0]
-					repeat_on = args[1]
+					additional_rounds = args[1]
+					repeat_on = args[2]
 					@pstore.transaction {
-						@pstore[:tournaments] << RSwiss::Tournament.new(players, repeat_on)
+						@pstore[:tournaments] << RSwiss::Tournament.new(players, additional_rounds, repeat_on)
 						retval = (@pstore[:tournaments].length - 1)
 					}
 				when :checkout_match then
@@ -79,6 +85,11 @@ class XMLRSwiss
 							retval << [match.p1.id, match.p2.id]
 						end
 					}
+				when :round then
+					tournament_id = args[0]
+					@pstore.transaction(true) {
+						retval = @pstore[:tournaments][tournament_id].round
+					}
 			end
 		rescue RSwiss::RepeatedPlayersIds => e
 			# Raised from Tournament.new
@@ -109,8 +120,12 @@ class XMLRSwiss
 	end
 	private :dispatcher
 
-	def create_tournament(players, repeat_on = true)
-		dispatcher(:create_tournament, players, repeat_on)
+	def is_tournament(tournament_id)
+		dispatcher(:is_tournament, tournament_id);
+	end
+
+	def create_tournament(players, additional_rounds = 0, repeat_on = true)
+		dispatcher(:create_tournament, players, additional_rounds, repeat_on)
 	end
 
 	def checkout_match(tournament_id)
@@ -143,6 +158,10 @@ class XMLRSwiss
 
 	def repeated_matches(tournament_id)
 		dispatcher(:repeated_matches, tournament_id)
+	end
+
+	def round(tournament_id)
+		dispatcher(:round, tournament_id)
 	end
 
 end # of class XMLRSwiss

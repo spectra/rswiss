@@ -9,13 +9,13 @@ require 'rswiss.rb'
 require 'pp'
 players = ARGV[0].to_i
 repeat_on = (ARGV.length > 1)
-marshal_test = true
+marshal_test = false
 tournament = 0
 problems = 0
 workarounds = 0
 while true
 	p = [];0.upto(players) { |n| p << n }
-	t = RSwiss::Tournament.new(p, repeat_on)
+	t = RSwiss::Tournament.new(p, 0, repeat_on)
 	puts "\nNew tournment: #{tournament}. Repeating matches as last resort is <#{repeat_on ? "" : "not "}allowed>. Now is #{Time.now}."
 	while true
 		not_ended = false

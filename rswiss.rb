@@ -192,8 +192,9 @@ class Tournament
 	# Initializes a new tournament
 	#
 	# players_array:: array of player ids.
-	# allow_repeated_matches:: boolean defining if we allow repeating matches as last resort (default: false).
-	def initialize(players_array, allow_repeated_matches = false)
+	# additional_rounds:: number of aditional rounds (to over_evaluate the tournament) (default: 0)
+	# allow_repeated_matches:: boolean defining if we allow repeating matches as last resort (default: true).
+	def initialize(players_array, additional_rounds = 0, allow_repeated_matches = true)
 		raise RepeatedPlayersIds if players_array != players_array.uniq
 
 		# Populate our array of players
@@ -203,7 +204,7 @@ class Tournament
 		end
 
 		# Internal state.
-		@rounds = (Math.log(@players.length) / Math.log(2)).ceil
+		@rounds = (Math.log(@players.length) / Math.log(2)).ceil + additional_rounds.abs
 		@matches = (@players.length/2).floor
 		@rearranges = 0
 		@round = 0

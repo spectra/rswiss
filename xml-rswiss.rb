@@ -6,13 +6,13 @@
 # worth it, you can buy me a beer in return."
 # ----------------------------------------------------------------------
 require 'rswiss'
-require 'pstore'
+require 'mystore'
 
 class XMLRSwiss
 
 	def initialize(file = nil)
 		@file = file.nil? ? "/tmp/XMLRSwiss.#{$$}.pstore" : file
-		@pstore = PStore.new(@file)
+		@pstore = MyStore.new(@file)
 		@pstore.transaction {
 			@pstore[:tournaments] ||= Array.new
 		}

@@ -12,7 +12,7 @@ class XMLRSwiss
 
 	def initialize(file = nil)
 		@file = file.nil? ? "/tmp/XMLRSwiss.#{$$}.pstore" : file
-		@pstore = MyStore.new(@file)
+		@pstore = MyStore.new(@file, 10, 50)
 		@pstore.transaction {
 			@pstore[:tournaments] ||= Array.new
 		}

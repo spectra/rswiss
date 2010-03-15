@@ -386,7 +386,7 @@ class Tournament
 		raise StillRunning unless ended?
 		criteria = @criteria if criteria.nil?
 
-		top_players = @players
+		top_players = @players.clone
 		while ! criteria.empty?
 			this_time_criteria = criteria.shift
 			scores = []

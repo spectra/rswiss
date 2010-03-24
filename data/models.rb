@@ -197,6 +197,7 @@ class Tournament < Sequel::Model
 					# Stop looking for if we found it.
 					unless player.byed
 						player.byed = true
+						player.matches +=1
 						player.save
 						break
 					end
@@ -210,6 +211,8 @@ class Tournament < Sequel::Model
 			# some to delete and regenerate the round only with the last players shuffled.
 			if self.matches_per_round != round_matches(self.round).length
 				self.planned_matches(self.round).reverse.each { |match|
+					match.p1.matches -= 1; match.p1.save
+					match.p2.matches -= 1; match.p2.save
 					match.delete                                                        # delete the match
 					lastplayers = myplayers.clone
 					lastplayers.delete_if { |player| player.matches != self.round }     # discard those that have already played
@@ -245,12 +248,16 @@ class Tournament < Sequel::Model
 	def gen_matches(myplayers, round)
 		myplayers.each do |p1|
 			next if p1.matches != round                 # exceeded number of matches in a round
+			opponents_of_p1 = p1.opponents
 			myplayers.each do |p2|
 				next if p1 == p2                          # player cannot play against itself
-				next if has_match?(p1, p2)                # cannot repeat matches (this is a major source of problems
+				next if opponents_of_p1.include?(p2)      # cannot play again
+#				next if has_match?(p1, p2)                # cannot repeat matches (this is a major source of problems
 				                                          # ... with few players - and the reason for hard_rearrange!)
 				next if p2.matches != round               # exceeded number of matches in a round (e.g.: received a bye already)
 				m = Match.create(:p1 => p1, :p2 => p2, :tournament => self, :round => round)
+				p1.matches += 1; p1.save
+				p2.matches += 1; p2.save
 				m.save
 				break
 			end
@@ -270,10 +277,6 @@ class Player < Sequel::Model
 	def validate
 		errors.add(:tournament, "can't be empty") if self.tournament.nil?
 		errors.add(:in_tournament_id, "can't be empty") if self.in_tournament_id.nil?
-	end
-
-	def matches
-		all_matches.length + (self.byed ? 1 : 0)
 	end
 
 	def all_matches

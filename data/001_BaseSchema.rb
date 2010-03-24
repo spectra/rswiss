@@ -25,6 +25,7 @@ class BaseSchema < Sequel::Migration
 			Fixnum :in_tournament_id
 			boolean :byed, :default => false
 			foreign_key :tournament_id, :tournaments
+			Fixnum :matches, :default => 0
 		end
 
 		create_table! :matches do

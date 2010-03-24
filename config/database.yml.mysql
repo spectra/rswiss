@@ -1,0 +1,6 @@
+adapter: mysql
+host: localhost
+username: sswiss
+password: sswiss
+database: sswiss
+connector: "mysql://sswiss:sswiss@localhost/sswiss"

@@ -20,9 +20,21 @@ while true
 	while true
 		not_ended = false
 		message = ""
+		retries = 0
 		begin
 			m_arr = client.call("matchmaker.checkout_match", t_id)
 		rescue XMLRPC::FaultException => e
+			if e.faultCode == 203 or e.faultCode == 201
+				retries += 1
+				puts ">>> We'll wait 5 seconds (#{e.message}). Try ##{retries}. "
+				sleep 5
+				if retries > 5
+					not_ended = true
+					message = e.message
+				else
+					retry
+				end
+			end
 			if e.faultCode != 202
 				not_ended = true
 				message = e.message

@@ -5,111 +5,97 @@
 # want with this stuff. If we meet some day, and you think this stuff is
 # worth it, you can buy me a beer in return."
 # ----------------------------------------------------------------------
-require 'rswiss'
-require 'mystore'
+require 'data/init.rb'
 
-class XMLRSwiss
-
-	def initialize(file = nil)
-		@file = file.nil? ? "/tmp/XMLRSwiss.#{$$}.pstore" : file
-		@pstore = MyStore.new(@file, 10, 50)
-		@pstore.transaction {
-			@pstore[:tournaments] ||= Array.new
-		}
-	end
+class XMLSSwiss
 
 	def dispatcher(method, *args, &block)
 		retval = nil
 		begin
 			case method
-				when :is_tournament then
-					tournament_id = args[0]
-					@pstore.transaction {
-						retval = (@pstore[:tournaments].length > tournament_id);
-					}
 				when :create_tournament then
 					players = args[0]
 					additional_rounds = args[1]
 					repeat_on = args[2]
-					@pstore.transaction {
-						@pstore[:tournaments] << RSwiss::Tournament.new(players, additional_rounds, repeat_on)
-						retval = (@pstore[:tournaments].length - 1)
-					}
+					tournament = SSwiss::Tournament.create(:n_players => players.length, :additional_rounds => additional_rounds, :allow_repeat => repeat_on)
+					tournament.save
+					tournament.inject_players(players)
+					retval = tournament.id
 				when :checkout_match then
 					tournament_id = args[0]
-					@pstore.transaction {
-						match = @pstore[:tournaments][tournament_id].checkout_match
-						retval = [ match.p1.id, match.p2.id ]
-					}
+					tournament = SSwiss::Tournament[:id => tournament_id]
+					match = tournament.checkout_match
+					retval = [ match.p1.in_tournament_id, match.p2.in_tournament_id ]
 				when :commit_match then
 					tournament_id = args[0]
 					match_arr = args[1]
-					match_arr << args[2]
-					@pstore.transaction {
-						@pstore[:tournaments][tournament_id].commit_match(match_arr)
-					}
+					result = args[2]
+					tournament = SSwiss::Tournament[:id => tournament_id]
+					p1 = SSwiss::Player[:in_tournament_id => match_arr[0], :tournament_id => tournament_id]
+					p2 = SSwiss::Player[:in_tournament_id => match_arr[1], :tournament_id => tournament_id]
+					match = SSwiss::Match[:p1_id => p1.id, :p2_id => p2.id, :checked_out => true]
+					raise SSwiss::MatchNotCheckedOut if match.nil?
+					raise SSwiss::MatchExists unless match.result.nil?
+					match.result = result
+					match.save
 					retval = true
 				when :has_ended then
 					tournament_id = args[0]
-					@pstore.transaction(true) {
-						retval = @pstore[:tournaments][tournament_id].ended?
-					}
+					tournament = SSwiss::Tournament[:id => tournament_id]
+					retval = tournament.ended?
 				when :table_by_score then
 					tournament_id = args[0]
-					@pstore.transaction(true) {
-						table = @pstore[:tournaments][tournament_id].table_by_score
-						retval = @pstore[:tournaments][tournament_id].table2array(table, true)
-					}
+					tournament = SSwiss::Tournament[:id => tournament_id]
+					table = tournament.players(:score)
+					retval = table2array(table, true)
 				when :table_by_criteria then
 					tournament_id = args[0]
-					@pstore.transaction(true) {
-						table = @pstore[:tournaments][tournament_id].table_by_criteria
-						retval = @pstore[:tournaments][tournament_id].table2array(table, true)
-					}
+					tournament = SSwiss::Tournament[:id => tournament_id]
+					table = tournament.players(:criteria)
+					retval = table2array(table, true)
 				when :winner then
 					tournament_id = args[0]
-					@pstore.transaction(true) {
-						winner = @pstore[:tournaments][tournament_id].winner
-						retval = [ winner[0].id, winner[1].to_s ]
-					}
+					tournament = SSwiss::Tournament[:id => tournament_id]
+					winner = tournament.winner
+					retval = [ winner[0].in_tournament_id, winner[1].to_s ]
 				when :repeated_matches then
 					tournament_id = args[0]
-					@pstore.transaction(true) {
-						retval = @pstore[:tournaments][tournament_id].repeated_matches
-					}
+					tournament = SSwiss::Tournament[:id => tournament_id]
+					retval = tournament.repeated_matches
 				when :checkedout_matches then
 					tournament_id = args[0]
+					tournament = SSwiss::Tournament[:id => tournament_id]
 					retval = []
-					@pstore.transaction(true) {
-						@pstore[:tournaments][tournament_id].checkedout_matches.each do |match|
-							retval << [match.p1.id, match.p2.id]
-						end
-					}
+					tournament.checkedout_matches.each do |match|
+						retval << [match.p1.in_tournament_id, match.p2.in_tournament_id]
+					end
 				when :round then
 					tournament_id = args[0]
-					@pstore.transaction(true) {
-						retval = @pstore[:tournaments][tournament_id].round
-					}
+					tournament = SSwiss::Tournament[:id => tournament_id]
+					retval = tournament.round
 			end
-		rescue RSwiss::RepeatedPlayersIds => e
+		rescue SSwiss::RepeatedPlayerIds => e
 			# Raised from Tournament.new
 			raise XMLRPC::FaultException.new(101, e.message)
-		rescue RSwiss::EndOfTournament => e
+		rescue SSwiss::EndOfTournament => e
 			# Raised from #gen_next_round (from #checkout_match) or from #commit_match
 			raise XMLRPC::FaultException.new(202, e.message)
+		rescue SSwiss::GeneratingRound => e
+			# Raised from #checkout_match
+			raise XMLRPC::FaultException.new(203, e.message)
 		rescue ArgumentError => e
 			# Raised from #commit_match
 			raise XMLRPC::FaultException.new(301, e.message)
-		rescue RSwiss::MatchExists => e
+		rescue SSwiss::MatchExists => e
 			# Raised from #commit_match
 			raise XMLRPC::FaultException.new(302, e.message)
-		rescue RSwiss::MatchNotCheckedOut => e
+		rescue SSwiss::MatchNotCheckedOut => e
 			# Raised from #commit_match
 			raise XMLRPC::FaultException.new(303, e.message)
-		rescue RSwiss::StillRunning => e
+		rescue SSwiss::StillRunning => e
 			# Raised from #winner
 			raise XMLRPC::FaultException.new(401, e.message)
-		rescue RSwiss::StillTied => e
+		rescue SSwiss::StillTied => e
 			# Raised from #winner
 			raise XMLRPC::FaultException.new(402, e.message)
 		rescue RuntimeError => e
@@ -119,10 +105,6 @@ class XMLRSwiss
 		return retval
 	end
 	private :dispatcher
-
-	def is_tournament(tournament_id)
-		dispatcher(:is_tournament, tournament_id);
-	end
 
 	def create_tournament(players, additional_rounds = 0, repeat_on = true)
 		dispatcher(:create_tournament, players, additional_rounds, repeat_on)
@@ -164,4 +146,24 @@ class XMLRSwiss
 		dispatcher(:round, tournament_id)
 	end
 
-end # of class XMLRSwiss
+	# Converts a table of players in an ordered array with all the criterias
+	#
+	# table:: the table
+	# add_played_matches:: boolean. If true, add the number of matches that player played already as second element of the array.
+	# criteria:: the list of criterias to be included (assume the default if not given)
+	def table2array(table, add_played_matches = false, mycriteria = nil)
+		mycriteria = self.criteria if mycriteria.nil?
+		ret = []
+		table.each do |player|
+			line = []
+			line << player.id
+			line << player.matches if add_played_matches
+			mycriteria.each do |func|
+				line << player.send(func)
+			end
+			ret << line
+		end
+		return ret
+	end
+
+end # of class XMLSSwiss

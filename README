@@ -6,7 +6,7 @@
 # worth it, you can buy me a beer in return."
 # ----------------------------------------------------------------------
 
-RSwiss
+SSwiss
 ------
 
 This is a simple implementation of Swiss Tournament (actually it's more like
@@ -16,24 +16,31 @@ work (and not replace FIDE rules - if you're thinking about chess - or any
 other software dealing with the same issue).
 
 
+Requirements
+------------
+
+Sequel: tested with 3.9.0. Probably will work with earlier versions.
+
+
 How it works
 ------------
 
-Class RSwiss::Tournament is the central piece here. A new instance of that is
-generated passing an array of player ids. With that in place, new matches are
-generated automatically for each round and are checked-out with the
-#checkout_match method. Since every round depends on the results of previous
-matches, checked-out matches have to be commited back with the #commit_match
-method.
+We're using a database under Sequel to store our tournaments, players and
+matches data. The model SSwiss::Tournament is the central piece here. A new
+instance of that is generated passing the number of players. An array of
+player ids have to be passed with #inject_players. With that in place, new
+matches are generated automatically for each round and are checked-out with
+the #checkout_match method. Since every round depends on the results of
+previous matches, checked-out matches have to be commited back with the
+#commit_match method (just saving the object SSwiss::Match also will work).
 
-This goes on until RSwiss::Tournament raises an RSwiss::EndOfTournament
-exception, which marks... well... the end of the tournament (at any given point
-#ended? can be called if you want to prevent exceptions being raised).
+This goes on until SSwiss::Tournament raises an SSwiss::EndOfTournament
+exception, which marks... well... the end of the tournament (at any given
+point #ended? can be called if you want to prevent exceptions being raised).
 
-The result table can be obtained with #table_by_score or with
-#table_by_criteria. The last one accepts an array of tie-breaking criterias
-ordered most-relevant-left. The default criteria can be accessed by
-#criteria, and equals to the following array:
+The result table can be obtained with #players(:score) or with
+#players(:criteria). You can set the criteria with #criteria=. The default
+#criteria can be accessed by criteria, and equals to the following array:
 
 [ :score, :buchholz_score, :neustadtl_score, :c_score, :opp_c_score, :wins ]
 
@@ -66,6 +73,12 @@ counts as a match, but adds no opponent (so it gives in the score, but takes
 in every other criteria, including number of wins). The "bye" is given each
 round to the last player that has not received one yet.
 
+By default, SSwiss generates just the number of rounds that ensure a fairly
+evaluated tournament (the binary logarithm of the number of players). You can
+use #additional_rounds= to set the number of additional rounds to be generated
+(just in case you need to "overevaluate" your tournament). Use this feature
+with care...
+
 Traditionally, there's a restriction on repeating matches. Unfortunatelly, this
 can generate deadlocks (where we simply cannot generate a round without
 repeated matches given the previous results). This usually happens in as low as
@@ -76,17 +89,15 @@ When this happens, the only way to break out of it is to throw everything
 away and start over (not a good thing). Well... there's, of course, less
 destructive measures, but it requires bending the rules a little.
 
-By default, RSwiss generates just the number of rounds that ensure a fairly
-evaluated tournament (the binary logarithm of the number of players). The
-second argument to RSwiss::Tournament is the number of additional rounds to be
-generated (just in case you need to "overevaluate" your tournament). Use this
-feature with care...
+The first way SSwiss uses to try to break the deadlock is to discarding some
+of the last few unexposed matches, shuffling their players and trying to build
+different matches. But even that has limitations.
 
-When creating a new tournament, the third argument to RSwiss::Tournament is
-a bloolean flag. When set to "true", it will allow one of the previous
-matches to be repeated as a way to break the deadlock. This can only happen
-once for each match. In my experience, when it happens is also usually
-happens once in the whole tournament, so it's not a big deal.
+Also, when creating a new tournament, you can also use #allow_repeat= as a
+bloolean flag. When set to "true", it will allow one of the previous matches
+to be repeated as a way to break the deadlock. This can only happen once for
+each match. In my experience, when it happens is also usually happens once in
+the whole tournament, so it's not a big deal.
 
 Other solutions have been proposed, such as giving a "bye" to the involved
 players, or generating a really unbalanced match (with players with too
@@ -110,19 +121,11 @@ recorded).
 XML-RPC
 -------
 
-The "xml-rswiss.rb" is a simple XML-RPC server that accepts the creation of
+The "xml-sswiss.rb" is a simple XML-RPC server that accepts the creation of
 tournaments and all the interface to exchange matches with a XML-RPC client.
 You can use it by running "simple_serve.rb" (for the native XMLRPC server that
-ships with Ruby) or as a Rack app - try running "rack_serve.ru". As with
-"rswiss.rb", this also have a test in "xml-test.rb", that actually does the
-same "test.rb" does, but acting as a XML-RPC client to "xml-rswiss.rb" server.
-If you're using the Rack version with "xml-test.rb", run it with "-p 9090" (or
-change the source for "xml-test.rb").
-
-
-Marshalling and Persistence
----------------------------
-
-Tournaments and all the internal objects are marshalable with Ruby's Marshal
-class. The "xml-rswiss.rb" server uses PStore to persist those tournaments.
-
+ships with Ruby) or as a Rack app - try running "rack_serve.ru". This also
+have a test in "xml-test.rb", that actually does the same "test.rb" does, but
+acting as a XML-RPC client to "xml-sswiss.rb" server.  If you're using the
+Rack version with "xml-test.rb", run it with "-p 9090" (or change the source
+for "xml-test.rb").

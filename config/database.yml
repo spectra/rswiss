@@ -1,6 +1,6 @@
-adapter: sqlite
-host: 
-username: 
-password: 
-database: /tmp/ble.db
-connector: "sqlite:///tmp/ble.db"
+adapter: mysql
+host: localhost
+username: sswiss
+password: sswiss
+database: sswiss
+connector: "mysql://sswiss:sswiss@localhost/sswiss"

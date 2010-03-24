@@ -33,13 +33,13 @@ while true
 		result = nil
 		if rnd < 20
 			# 20% chance of draw
-			result = 0
+			result = -1
 		elsif rnd >= 20 and rnd < 70
 			# 50% chance of p1 win
-			result = 1
+			result = 0
 		else
 			# 30% chance of p2 win
-			result = 2
+			result = 1
 		end
 		client.call("matchmaker.commit_match", t_id, m_arr, result)
 	end

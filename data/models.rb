@@ -35,7 +35,7 @@ class Tournament < Sequel::Model
 
 	def inject_players(array)
 		raise RuntimeError, "The length of the provided array must match :n_players" if array.length != self.n_players
-		raise RuntimeError, "The provided array must not have repeated ids" if array.uniq.sort != array.sort
+		raise RepeatedPlayerIds if array.uniq.sort != array.sort
 
 		array.each { |player_id|
 			player = Player.create(:tournament => self, :in_tournament_id => player_id)
@@ -131,8 +131,11 @@ class Tournament < Sequel::Model
 
 	# Checkout the next match
 	def checkout_match
+		@mutex ||= Mutex.new
+
 		mymatch = available_matches[0]
 		if mymatch.nil?
+			raise GeneratingRound if @mutex.locked?
 			gen_next_round
 			return checkout_match
 		end
@@ -184,8 +187,6 @@ class Tournament < Sequel::Model
 	def gen_next_round
 		raise RuntimeError, "Still #{checkedout_matches.length} matches to be returned." unless checkedout_matches.empty?
 		raise EndOfTournament if ended?
-
-		@mutex ||= Mutex.new
 
 		@mutex.synchronize {
 			myplayers = self.round == 0 ? players(:random) : players(:soft) # round 0 is random
@@ -429,12 +430,16 @@ class Match < Sequel::Model
 end # of class Match
 
 # Tournament Exceptions
+class RepeatedPlayerIds < Exception; def message; "Repeated player ids detected!"; end; end
+class MatchExists < Exception; def message; "This match already exist!"; end; end
+class MatchNotCheckedOut < Exception; def message; "This match has not been checked out!"; end; end
 class EndOfTournament < Exception; def message; "This tournament reached the end!"; end; end
 class StillTied < Exception; def message; "We have a difficult tie to break. Try flipping a coin."; end; end
 class StillRunning < Exception; def message; "The Tournament has not ended yet."; end; end
 class MaxRearranges < Exception; def message; "Reached maximum number of rearrangements allowed."; end; end
 class RepetitionExhausted < Exception; def message; "Allowing match repetition as last resort was not enough."; end; end
 class UnknownAlgorithm < Exception; def message; "Match generation algorithm unknown."; end; end
+class GeneratingRound < Exception; def message; "Please wait while we generate the next round."; end; end
 
 end # of module SSwiss
 

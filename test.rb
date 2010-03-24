@@ -5,69 +5,50 @@
 # want with this stuff. If we meet some day, and you think this stuff is
 # worth it, you can buy me a beer in return."
 # ----------------------------------------------------------------------
-require 'rswiss.rb'
+require 'data/init'
 require 'pp'
 players = ARGV[0].to_i
 repeat_on = (ARGV.length > 1)
-marshal_test = false
 tournament = 0
 problems = 0
 workarounds = 0
 while true
 	p = [];0.upto(players) { |n| p << n }
-	t = RSwiss::Tournament.new(p, 0, repeat_on)
-	puts "\nNew tournment: #{tournament}. Repeating matches as last resort is <#{repeat_on ? "" : "not "}allowed>. Now is #{Time.now}."
+	t = SSwiss::Tournament.create(:n_players => p.length)
+	t.allow_repeat = repeat_on
+	t.inject_players(p)
+	t.save
+	puts "\nNew tournment: #{tournament} id=#{t.id}. Repeating matches as last resort is <#{repeat_on ? "" : "not "}allowed>. Now is #{Time.now}."
 	while true
 		not_ended = false
 		message = ""
 		begin
+			puts ">>> Checking out: #{Time.now}"
 			m = t.checkout_match
-		rescue RSwiss::EndOfTournament
+			puts ">>> Checked out: #{Time.now}"
+		rescue SSwiss::EndOfTournament
 			# Some error like end of tournament
 			break
-		rescue RSwiss::MaxRearranges, RSwiss::RepetitionExhausted, RSwiss::UnknownAlgorithm => e
+		rescue SSwiss::MaxRearranges, SSwiss::RepetitionExhausted, SSwiss::UnknownAlgorithm => e
 			# Fatal error
 			not_ended = true
 			message = e.message
 			break
 		end
-		rnd = rand(100)
-		if rnd < 20
-			# 20% chance of draw
-			m.decide(0)
-		elsif rnd >= 20 and rnd < 70
-			# 50% chance of the highest score win
-			if m.p1.score > m.p2.score
-				m.decide(1)
-			else
-				m.decide(2)
-			end
-		else
-			# 30% chance of the lowest score win
-			if m.p1.score > m.p2.score
-				m.decide(2)
-			else
-				m.decide(1)
-			end
-		end
-#		t.commit_match([m.p1.id, m.p2.id, m.result])
+		m.result = rand(3) - 1
+		puts ">>> Committing"
 		t.commit_match(m)
-		if marshal_test
-			puts ">>> Marshal test going on..."
-			s = Marshal.dump(t)
-			t = Marshal.load(s)
-		end
+		puts ">>> Committed"
 	end
 	
 	if ! not_ended
-		pp t.table_by_criteria if players < 50
-#		pp t.table2array(t.table_by_criteria) if players < 50
+		pp t.players(:criteria) if players < 50
 		begin
 			winner = t.winner
 			puts "The winner (by #{winner[1]}) is:"
 			pp winner[0]
 			workarounds += t.repeated_matches
-		rescue RSwiss::StillTied
+		rescue SSwiss::StillTied
 			puts "This have to be decided by luck..."
 		end
 	else

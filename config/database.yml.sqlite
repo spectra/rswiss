@@ -1,0 +1,6 @@
+adapter: sqlite
+host: 
+username: 
+password: 
+database: /tmp/ble.db
+connector: "sqlite:///tmp/ble.db"

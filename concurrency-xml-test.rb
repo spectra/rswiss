@@ -18,6 +18,7 @@ while true
 	retries = 0
 	begin
 		m_arr = client.call("matchmaker.checkout_match", t_id)
+		puts ">>> #{Time.now} Checked out #{m_arr.inspect}"
 	rescue XMLRPC::FaultException => e
 		if e.faultCode == 203 or e.faultCode == 201
 			retries += 1
@@ -48,12 +49,11 @@ while true
 		# 30% chance of p2 win
 		result = 1
 	end
+	puts ">>> Committing #{m_arr.inspect}"
 	client.call("matchmaker.commit_match", t_id, m_arr, result)
-	puts ">>> Committed #{m_arr.inspect}"
 end
 
 if ! not_ended
-	pp client.call("matchmaker.table_by_criteria", t_id) if players < 50
 	begin
 		winner = client.call("matchmaker.winner", t_id)
 		puts "The winner (by #{winner[1]}) is:"

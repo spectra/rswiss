@@ -13,6 +13,7 @@ class BaseSchema < Sequel::Migration
 		create_table! :tournaments do
 			primary_key :id
 			boolean :allow_repeat, :default => false
+			boolean :locked, :default => false
 			Fixnum :n_players
 			Fixnum :rounds
 			Fixnum :matches_per_round

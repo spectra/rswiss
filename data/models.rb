@@ -14,6 +14,20 @@ module SSwiss
 class Tournament < Sequel::Model
 	attr_accessor :criteria
 
+	def lock
+		self.locked = true
+		self.save
+	end
+
+	def unlock
+		self.locked = false
+		self.save
+	end
+
+	def locked?
+		self.locked
+	end
+
 	def validate
 		errors.add(:n_players, "can't be empty") if self.n_players.nil?
 	end
@@ -52,7 +66,7 @@ class Tournament < Sequel::Model
 				myplayers.sort do |a, b|
 					a_side = []
 					b_side = []
-					criteria.each do |func|
+					self.criteria.each do |func|
 						a_side << a.send(func)
 						b_side << b.send(func)
 					end
@@ -129,21 +143,20 @@ class Tournament < Sequel::Model
 		Match.dataset.filter(:tournament_id => self.id).filter(:round => round).filter(:planned => true).all
 	end
 
-	# Checkout the next match
 	def checkout_match
-		@mutex ||= Mutex.new
-
-		mymatch = available_matches[0]
-		if mymatch.nil?
-			raise GeneratingRound if @mutex.locked?
-			gen_next_round
-			return checkout_match
+		mymatch = Match[:tournament_id => self.id, :result => nil, :checked_out => false, :planned => false]
+		if mymatch
+			mymatch = false if Match.dataset.filter(:id=>mymatch[:id], :checked_out => false).update(:checked_out=>true) == 0
 		end
-		mymatch.checked_out = true
-		mymatch.save
-		return mymatch
+		if mymatch
+			mymatch.values[:checked_out] = true
+			mymatch
+		else
+			gen_next_round
+			checkout_match
+		end
 	end
-
+	
 	# For compatibility
 	def commit_match(match)
 		match.save
@@ -187,8 +200,11 @@ class Tournament < Sequel::Model
 	def gen_next_round
 		raise RuntimeError, "Still #{checkedout_matches.length} matches to be returned." unless checkedout_matches.empty?
 		raise EndOfTournament if ended?
+		raise GeneratingRound if locked?
 
-		@mutex.synchronize {
+		self.lock
+
+		begin
 			myplayers = self.round == 0 ? players(:random) : players(:soft) # round 0 is random
 
 			# Will we have a last unpaired player?
@@ -229,12 +245,23 @@ class Tournament < Sequel::Model
 				planned_matches(self.round).each { |match| match.delete }
 				self.n_players.times {
 					myplayers = players(:hard)
-					gen_matches(my_players, self.round)
+					gen_matches(myplayers, self.round)
 					break if self.matches_per_round == round_matches(self.round).length # try no more if ok.
 				}
 			end
 
-			raise "boom! #{self.matches_per_round} != #{round_matches(self.round).length}" if self.matches_per_round != round_matches(self.round).length
+			# Argh! Still haven't reached the target!
+			if self.matches_per_round != round_matches(self.round).length
+				# We'll try repeating matches
+				if self.allow_repeat
+					gen_matches(myplayers, self.round, true)
+				else
+					raise SSWiss::MaxRearranges
+				end
+			end
+
+			# Well... that's all folks
+			raise SSwiss::RepetitionExhausted if self.matches_per_round != round_matches(self.round).length
 
 			# Great... we have generated enough matches for this round.
 			# Turn the planned flag off
@@ -242,21 +269,30 @@ class Tournament < Sequel::Model
 			# And save the tournament state
 			self.round += 1
 			self.save
-		}
+		ensure
+			unlock
+		end
 	end
 
 	# Generate matches inside a round (this is auxiliary function to #gen_next_round)
-	def gen_matches(myplayers, round)
+	def gen_matches(myplayers, round, repeat_on = false)
 		myplayers.each do |p1|
 			next if p1.matches != round                 # exceeded number of matches in a round
 			opponents_of_p1 = p1.opponents
 			myplayers.each do |p2|
+				myrepeated = false
 				next if p1 == p2                          # player cannot play against itself
-				next if opponents_of_p1.include?(p2)      # cannot play again
-#				next if has_match?(p1, p2)                # cannot repeat matches (this is a major source of problems
-				                                          # ... with few players - and the reason for hard_rearrange!)
 				next if p2.matches != round               # exceeded number of matches in a round (e.g.: received a bye already)
-				m = Match.create(:p1 => p1, :p2 => p2, :tournament => self, :round => round)
+				if opponents_of_p1.include?(p2)           # cannot repeat...
+					next unless repeat_on                   # ... unless they told us so
+					m = SSwiss::Match[:p1_id => p1.id, :p2_id => p2.id]
+					m = SSwiss::Match[:p1_id => p2.id, :p2_id => p1.id] if m.nil?
+					next if m.repeated                      # ... and it was not repeated before
+					m.repeated = true
+					m.save
+					myrepeated = true
+				end
+				m = Match.create(:p1 => p1, :p2 => p2, :tournament => self, :round => round, :repeated => myrepeated)
 				p1.matches += 1; p1.save
 				p2.matches += 1; p2.save
 				m.save
@@ -417,7 +453,7 @@ class Match < Sequel::Model
 
 	# :nodoc:
 	def inspect
-		sprintf("#<%s:%#x id=%d p1_id=%d p2_id=%d round=%d result=%s planned=%s>", self.class.name, self.__id__.abs, self.id, self.p1.id, self.p2.id, self.round, self.result.inspect, self.planned.inspect)
+		sprintf("#<%s:%#x id=%d p1_id=%d p2_id=%d round=%d result=%s planned=%s repeated=%s>", self.class.name, self.__id__.abs, self.id, self.p1.id, self.p2.id, self.round, self.result.inspect, self.planned.inspect, self.repeated.inspect)
 	end
 
 	def validate

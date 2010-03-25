@@ -33,9 +33,9 @@ class XMLSSwiss
 					tournament = SSwiss::Tournament[:id => tournament_id]
 					p1 = SSwiss::Player[:in_tournament_id => match_arr[0], :tournament_id => tournament_id]
 					p2 = SSwiss::Player[:in_tournament_id => match_arr[1], :tournament_id => tournament_id]
-					match = SSwiss::Match[:p1_id => p1.id, :p2_id => p2.id, :checked_out => true]
-					raise SSwiss::MatchNotCheckedOut if match.nil?
-					raise SSwiss::MatchExists unless match.result.nil?
+					match = SSwiss::Match[:p1_id => p1.id, :p2_id => p2.id, :checked_out => true, :result => nil]
+					match = SSwiss::Match[:p1_id => p2.id, :p2_id => p1.id, :checked_out => true, :result => nil] if match.nil?
+					raise SSwiss::MatchNotCheckedOut) if match.nil?
 					match.result = result
 					match.save
 					retval = true
@@ -52,7 +52,7 @@ class XMLSSwiss
 					tournament_id = args[0]
 					tournament = SSwiss::Tournament[:id => tournament_id]
 					table = tournament.players(:criteria)
-					retval = table2array(table, true)
+					retval = table2array(tournament, table, true)
 				when :winner then
 					tournament_id = args[0]
 					tournament = SSwiss::Tournament[:id => tournament_id]
@@ -148,15 +148,16 @@ class XMLSSwiss
 
 	# Converts a table of players in an ordered array with all the criterias
 	#
+	# tournament:: The SSwiss::Tournament object.
 	# table:: the table
 	# add_played_matches:: boolean. If true, add the number of matches that player played already as second element of the array.
 	# criteria:: the list of criterias to be included (assume the default if not given)
-	def table2array(table, add_played_matches = false, mycriteria = nil)
-		mycriteria = self.criteria if mycriteria.nil?
+	def table2array(tournament, table, add_played_matches = false, mycriteria = nil)
+		mycriteria = tournament.criteria if mycriteria.nil?
 		ret = []
 		table.each do |player|
 			line = []
-			line << player.id
+			line << player.in_tournament_id
 			line << player.matches if add_played_matches
 			mycriteria.each do |func|
 				line << player.send(func)

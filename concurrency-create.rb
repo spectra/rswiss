@@ -5,10 +5,13 @@
 # want with this stuff. If we meet some day, and you think this stuff is
 # worth it, you can buy me a beer in return."
 # ----------------------------------------------------------------------
-require 'xml-sswiss'
-require 'xmlrpc/server'
+require 'xmlrpc/client'
+players = ARGV[0].to_i
+repeat_on = (ARGV.length > 1)
+p = [];0.upto(players) { |n| p << n }
+client = XMLRPC::Client.new2("http://localhost:9090/")
+puts "\nCreating a new tournament"
+t_id = client.call("matchmaker.create_tournament", p, 0, repeat_on)
+puts "\nNew tournment: #{t_id}. Repeating matches as last resort is <#{repeat_on ? "" : "not "}allowed>. Now is #{Time.now}."
 
-s = XMLRPC::Server.new(9090, "0.0.0.0")
-s.add_introspection
-s.add_handler("matchmaker", XMLSSwiss.new)
-s.serve
+# vim: set ts=2:

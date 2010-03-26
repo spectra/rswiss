@@ -9,6 +9,13 @@ require 'data/init.rb'
 
 class XMLSSwiss
 
+	def initialize(logger)
+		@logger = logger
+		SSwiss::Tournament.logger = @logger
+		SSwiss::Player.logger = @logger
+		SSwiss::Match.logger = @logger
+	end
+
 	def dispatcher(method, *args, &block)
 		retval = nil
 		begin
@@ -31,13 +38,8 @@ class XMLSSwiss
 					match_arr = args[1]
 					result = args[2]
 					tournament = SSwiss::Tournament[:id => tournament_id]
-					p1 = SSwiss::Player[:in_tournament_id => match_arr[0], :tournament_id => tournament_id]
-					p2 = SSwiss::Player[:in_tournament_id => match_arr[1], :tournament_id => tournament_id]
-					match = SSwiss::Match[:p1_id => p1.id, :p2_id => p2.id, :checked_out => true, :result => nil]
-					match = SSwiss::Match[:p1_id => p2.id, :p2_id => p1.id, :checked_out => true, :result => nil] if match.nil?
-					raise SSwiss::MatchNotCheckedOut) if match.nil?
-					match.result = result
-					match.save
+					match_arr << result
+					tournament.commit_match(match_arr)
 					retval = true
 				when :has_ended then
 					tournament_id = args[0]
@@ -74,33 +76,12 @@ class XMLSSwiss
 					tournament = SSwiss::Tournament[:id => tournament_id]
 					retval = tournament.round
 			end
-		rescue SSwiss::RepeatedPlayerIds => e
-			# Raised from Tournament.new
-			raise XMLRPC::FaultException.new(101, e.message)
-		rescue SSwiss::EndOfTournament => e
-			# Raised from #gen_next_round (from #checkout_match) or from #commit_match
-			raise XMLRPC::FaultException.new(202, e.message)
-		rescue SSwiss::GeneratingRound => e
-			# Raised from #checkout_match
-			raise XMLRPC::FaultException.new(203, e.message)
-		rescue ArgumentError => e
-			# Raised from #commit_match
-			raise XMLRPC::FaultException.new(301, e.message)
-		rescue SSwiss::MatchExists => e
-			# Raised from #commit_match
-			raise XMLRPC::FaultException.new(302, e.message)
-		rescue SSwiss::MatchNotCheckedOut => e
-			# Raised from #commit_match
-			raise XMLRPC::FaultException.new(303, e.message)
-		rescue SSwiss::StillRunning => e
-			# Raised from #winner
-			raise XMLRPC::FaultException.new(401, e.message)
-		rescue SSwiss::StillTied => e
-			# Raised from #winner
-			raise XMLRPC::FaultException.new(402, e.message)
-		rescue RuntimeError => e
-			# Raised from #gen_next_round (from #checkout_match)
-			raise XMLRPC::FaultException.new(201, e.message)
+		rescue SSwiss::RepeatedPlayerIds, SSwiss::DiscrepantNumberOfPlayers, SSwiss::MatchesToBeCommitted, SSwiss::EndOfTournament, SSwiss::GeneratingRound, SSwiss::MaxRearranges, SSwiss::RepetitionExhausted, SSwiss::MatchNotCheckedOut, SSwiss::StillRunning, SSwiss::StillTied => e
+			if e.respond_to?(:faultCode)
+				raise XMLRPC::FaultException.new(e.faultCode, e.message)
+			else
+				raise e
+			end
 		end
 		return retval
 	end

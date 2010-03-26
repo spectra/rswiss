@@ -7,9 +7,12 @@
 # ----------------------------------------------------------------------
 require 'xml-sswiss'
 require 'rack-xmlrpc'
+require 'logger'
+logger = ::Logger.new(STDOUT)
+raise "boom" if logger.class == Rack::Logger
 
 s = Rack::XMLRPCServer.new
 s.add_introspection
-s.add_handler("matchmaker", XMLSSwiss.new)
+s.add_handler("matchmaker", XMLSSwiss.new(logger))
 
 run s

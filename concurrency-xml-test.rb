@@ -6,12 +6,13 @@
 # worth it, you can buy me a beer in return."
 # ----------------------------------------------------------------------
 require 'xmlrpc/client'
+require 'pp'
 t_id = ARGV[0].to_i
 repeat_on = (ARGV.length > 1)
 problems = 0
 workarounds = 0
 puts ">>> Attaching to tournament #{t_id}"
-client = XMLRPC::Client.new2("http://localhost:9090/")
+client = XMLRPC::Client.new2("http://localhost:9090/", nil, 180)
 while true
 	not_ended = false
 	message = ""

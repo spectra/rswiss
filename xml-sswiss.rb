@@ -7,13 +7,13 @@
 # ----------------------------------------------------------------------
 require 'data/init.rb'
 
-class XMLSSwiss
+class XMLRSwiss
 
 	def initialize(logger)
 		@logger = logger
-		SSwiss::Tournament.logger = @logger
-		SSwiss::Player.logger = @logger
-		SSwiss::Match.logger = @logger
+		RSwiss::Tournament.logger = @logger
+		RSwiss::Player.logger = @logger
+		RSwiss::Match.logger = @logger
 	end
 
 	def dispatcher(method, *args, &block)
@@ -24,59 +24,59 @@ class XMLSSwiss
 					players = args[0]
 					additional_rounds = args[1]
 					repeat_on = args[2]
-					tournament = SSwiss::Tournament.create(:n_players => players.length, :additional_rounds => additional_rounds, :allow_repeat => repeat_on)
+					tournament = RSwiss::Tournament.create(:n_players => players.length, :additional_rounds => additional_rounds, :allow_repeat => repeat_on)
 					tournament.save
 					tournament.inject_players(players)
 					retval = tournament.id
 				when :checkout_match then
 					tournament_id = args[0]
-					tournament = SSwiss::Tournament[:id => tournament_id]
+					tournament = RSwiss::Tournament[:id => tournament_id]
 					match = tournament.checkout_match
 					retval = [ match.p1.in_tournament_id, match.p2.in_tournament_id ]
 				when :commit_match then
 					tournament_id = args[0]
 					match_arr = args[1]
 					result = args[2]
-					tournament = SSwiss::Tournament[:id => tournament_id]
+					tournament = RSwiss::Tournament[:id => tournament_id]
 					match_arr << result
 					tournament.commit_match(match_arr)
 					retval = true
 				when :has_ended then
 					tournament_id = args[0]
-					tournament = SSwiss::Tournament[:id => tournament_id]
+					tournament = RSwiss::Tournament[:id => tournament_id]
 					retval = tournament.ended?
 				when :table_by_score then
 					tournament_id = args[0]
-					tournament = SSwiss::Tournament[:id => tournament_id]
+					tournament = RSwiss::Tournament[:id => tournament_id]
 					table = tournament.players(:score)
 					retval = table2array(table, true)
 				when :table_by_criteria then
 					tournament_id = args[0]
-					tournament = SSwiss::Tournament[:id => tournament_id]
+					tournament = RSwiss::Tournament[:id => tournament_id]
 					table = tournament.players(:criteria)
 					retval = table2array(tournament, table, true)
 				when :winner then
 					tournament_id = args[0]
-					tournament = SSwiss::Tournament[:id => tournament_id]
+					tournament = RSwiss::Tournament[:id => tournament_id]
 					winner = tournament.winner
 					retval = [ winner[0].in_tournament_id, winner[1].to_s ]
 				when :repeated_matches then
 					tournament_id = args[0]
-					tournament = SSwiss::Tournament[:id => tournament_id]
+					tournament = RSwiss::Tournament[:id => tournament_id]
 					retval = tournament.repeated_matches
 				when :checkedout_matches then
 					tournament_id = args[0]
-					tournament = SSwiss::Tournament[:id => tournament_id]
+					tournament = RSwiss::Tournament[:id => tournament_id]
 					retval = []
 					tournament.checkedout_matches.each do |match|
 						retval << [match.p1.in_tournament_id, match.p2.in_tournament_id]
 					end
 				when :round then
 					tournament_id = args[0]
-					tournament = SSwiss::Tournament[:id => tournament_id]
+					tournament = RSwiss::Tournament[:id => tournament_id]
 					retval = tournament.round
 			end
-		rescue SSwiss::RepeatedPlayerIds, SSwiss::DiscrepantNumberOfPlayers, SSwiss::MatchesToBeCommitted, SSwiss::EndOfTournament, SSwiss::GeneratingRound, SSwiss::MaxRearranges, SSwiss::RepetitionExhausted, SSwiss::MatchNotCheckedOut, SSwiss::StillRunning, SSwiss::StillTied => e
+		rescue RSwiss::RepeatedPlayerIds, RSwiss::DiscrepantNumberOfPlayers, RSwiss::MatchesToBeCommitted, RSwiss::EndOfTournament, RSwiss::GeneratingRound, RSwiss::MaxRearranges, RSwiss::RepetitionExhausted, RSwiss::MatchNotCheckedOut, RSwiss::StillRunning, RSwiss::StillTied => e
 			if e.respond_to?(:faultCode)
 				raise XMLRPC::FaultException.new(e.faultCode, e.message)
 			else
@@ -129,7 +129,7 @@ class XMLSSwiss
 
 	# Converts a table of players in an ordered array with all the criterias
 	#
-	# tournament:: The SSwiss::Tournament object.
+	# tournament:: The RSwiss::Tournament object.
 	# table:: the table
 	# add_played_matches:: boolean. If true, add the number of matches that player played already as second element of the array.
 	# criteria:: the list of criterias to be included (assume the default if not given)
@@ -148,4 +148,4 @@ class XMLSSwiss
 		return ret
 	end
 
-end # of class XMLSSwiss
+end # of class XMLRSwiss

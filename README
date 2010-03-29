@@ -6,7 +6,7 @@
 # worth it, you can buy me a beer in return."
 # ----------------------------------------------------------------------
 
-SSwiss
+RSwiss
 ------
 
 This is a simple implementation of Swiss Tournament (actually it's more like
@@ -26,15 +26,15 @@ How it works
 ------------
 
 We're using a database under Sequel to store our tournaments, players and
-matches data. The model SSwiss::Tournament is the central piece here. A new
+matches data. The model RSwiss::Tournament is the central piece here. A new
 instance of that is generated passing the number of players. An array of
 player ids have to be passed with #inject_players. With that in place, new
 matches are generated automatically for each round and are checked-out with
 the #checkout_match method. Since every round depends on the results of
 previous matches, checked-out matches have to be commited back with the
-#commit_match method (just saving the object SSwiss::Match also will work).
+#commit_match method (just saving the object RSwiss::Match also will work).
 
-This goes on until SSwiss::Tournament raises an SSwiss::EndOfTournament
+This goes on until RSwiss::Tournament raises an RSwiss::EndOfTournament
 exception, which marks... well... the end of the tournament (at any given
 point #ended? can be called if you want to prevent exceptions being raised).
 
@@ -73,7 +73,7 @@ counts as a match, but adds no opponent (so it gives in the score, but takes
 in every other criteria, including number of wins). The "bye" is given each
 round to the last player that has not received one yet.
 
-By default, SSwiss generates just the number of rounds that ensure a fairly
+By default, RSwiss generates just the number of rounds that ensure a fairly
 evaluated tournament (the binary logarithm of the number of players). You can
 use #additional_rounds= to set the number of additional rounds to be generated
 (just in case you need to "overevaluate" your tournament). Use this feature
@@ -89,7 +89,7 @@ When this happens, the only way to break out of it is to throw everything
 away and start over (not a good thing). Well... there's, of course, less
 destructive measures, but it requires bending the rules a little.
 
-The first way SSwiss uses to try to break the deadlock is to discarding some
+The first way RSwiss uses to try to break the deadlock is to discarding some
 of the last few unexposed matches, shuffling their players and trying to build
 different matches. But even that has limitations.
 

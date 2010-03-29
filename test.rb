@@ -14,7 +14,7 @@ problems = 0
 workarounds = 0
 while true
 	p = [];0.upto(players) { |n| p << n }
-	t = SSwiss::Tournament.create(:n_players => p.length)
+	t = RSwiss::Tournament.create(:n_players => p.length)
 	t.allow_repeat = repeat_on
 	t.inject_players(p)
 	t.save
@@ -26,10 +26,10 @@ while true
 			puts ">>> Checking out: #{Time.now}"
 			m = t.checkout_match
 			puts ">>> Checked out: #{Time.now}"
-		rescue SSwiss::EndOfTournament
+		rescue RSwiss::EndOfTournament
 			# Some error like end of tournament
 			break
-		rescue SSwiss::MaxRearranges, SSwiss::RepetitionExhausted, SSwiss::UnknownAlgorithm => e
+		rescue RSwiss::MaxRearranges, RSwiss::RepetitionExhausted, RSwiss::UnknownAlgorithm => e
 			# Fatal error
 			not_ended = true
 			message = e.message
@@ -48,7 +48,7 @@ while true
 			puts "The winner (by #{winner[1]}) is:"
 			pp winner[0]
 			workarounds += t.repeated_matches
-		rescue SSwiss::StillTied
+		rescue RSwiss::StillTied
 			puts "This have to be decided by luck..."
 		end
 	else

@@ -9,9 +9,9 @@ require 'xml-sswiss'
 require 'xmlrpc/server'
 require 'logger'
 
-logger = Logger.new(STDOUT)
+logger = ::Logger.new(STDOUT)
 
 s = XMLRPC::Server.new(9090, "0.0.0.0")
 s.add_introspection
-s.add_handler("matchmaker", XMLSSwiss.new(logger))
+s.add_handler("matchmaker", XMLRSwiss.new(logger))
 s.serve

@@ -9,7 +9,7 @@
 require 'sequel'
 require 'thread'
 
-module SSwiss
+module RSwiss
 
 class Tournament < Sequel::Model
 	attr_accessor :criteria
@@ -237,8 +237,8 @@ class Tournament < Sequel::Model
 			result = match.result
 		end
 		@@logger.info { "Trying to find-out if this match were given and was not returned yet." } if have_logger?
-		mymatch = SSwiss::Match[:p1_id => p1.id, :p2_id => p2.id, :checked_out => true, :result => nil]
-		mymatch = SSwiss::Match[:p1_id => p2.id, :p2_id => p1.id, :checked_out => true, :result => nil] if mymatch.nil?
+		mymatch = RSwiss::Match[:p1_id => p1.id, :p2_id => p2.id, :checked_out => true, :result => nil]
+		mymatch = RSwiss::Match[:p1_id => p2.id, :p2_id => p1.id, :checked_out => true, :result => nil] if mymatch.nil?
 		raise MatchNotCheckedOut if mymatch.nil?
 		@@logger.info { "Great... we found it. Let's commit it then." } if have_logger?
 		mymatch.result = result
@@ -358,7 +358,7 @@ class Tournament < Sequel::Model
 			end
 
 			# Well... that's all folks
-			raise SSwiss::RepetitionExhausted if self.matches_per_round != round_matches(self.round).length
+			raise RSwiss::RepetitionExhausted if self.matches_per_round != round_matches(self.round).length
 
 			# Great... we have generated enough matches for this round.
 			# Turn the planned flag off
@@ -386,8 +386,8 @@ class Tournament < Sequel::Model
 				if opponents_of_p1.include?(p2)           # cannot repeat...
 					next unless repeat_on                   # ... unless they told us so
 					@@logger.info { "Deciding on repetition." } if have_logger?
-					m = SSwiss::Match[:p1_id => p1.id, :p2_id => p2.id]
-					m = SSwiss::Match[:p1_id => p2.id, :p2_id => p1.id] if m.nil?
+					m = RSwiss::Match[:p1_id => p1.id, :p2_id => p2.id]
+					m = RSwiss::Match[:p1_id => p2.id, :p2_id => p1.id] if m.nil?
 					next if m.repeated                      # ... and it was not repeated before
 					m.repeated = true
 					m.save
@@ -620,5 +620,5 @@ class StillTied < Exception
 	def faultCode; 402; end; def message; "We have a difficult tie to break. Try flipping a coin."; end
 end
 
-end # of module SSwiss
+end # of module RSwiss
 

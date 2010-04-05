@@ -6,11 +6,10 @@
 # worth it, you can buy me a beer in return."
 # ----------------------------------------------------------------------
 require 'sequel/extensions/migration'
-require 'data/models'
 
 class BaseSchema < Sequel::Migration
 	def up
-		create_table! :tournaments do
+		create_table :tournaments do
 			primary_key :id
 			boolean :allow_repeat, :default => false
 			boolean :locked, :default => false
@@ -21,7 +20,7 @@ class BaseSchema < Sequel::Migration
 			Fixnum :round, :default => 0
 		end
 
-		create_table! :players do
+		create_table :players do
 			primary_key :id
 			Fixnum :in_tournament_id
 			boolean :byed, :default => false
@@ -29,7 +28,7 @@ class BaseSchema < Sequel::Migration
 			Fixnum :matches, :default => 0
 		end
 
-		create_table! :matches do
+		create_table :matches do
 			primary_key :id
 			foreign_key :p1_id, :players
 			foreign_key :p2_id, :players
